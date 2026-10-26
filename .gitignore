@@ -7,14 +7,26 @@ wheels/
 *.egg-info/
 .venv/
 .env
+.env.*
+!.env.chat.example
 
 # Node.js-related
 node_modules/
+.expo/
+project.private.config.json
+.data/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .npm
 .eslintcache
+.swc/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local setup screenshots can contain account and credential details.
+docs/images/baidu-mcp-*.png
 
 # Next.js build output
 .next/

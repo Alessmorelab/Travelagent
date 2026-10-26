@@ -1,0 +1,15 @@
+{
+  "miniprogramRoot": "dist/",
+  "projectname": "远行 Roam",
+  "description": "旅行助手、行程、收藏和旅行偏好",
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "setting": {
+    "urlCheck": true,
+    "es6": false,
+    "postcss": false,
+    "minified": true,
+    "enhance": true
+  },
+  "condition": {}
+}

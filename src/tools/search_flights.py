@@ -46,7 +46,7 @@ def search_flight(
         params["travelClass"] = travelClass
 
     headers = {"Authorization": f"Bearer {token}"}
-    response = requests.get(url, params=params, headers=headers)
+    response = requests.get(url, params=params, headers=headers, timeout=20)
     response.raise_for_status()
 
     data = response.json()
@@ -105,7 +105,7 @@ def get_nearby_airports(
     headers = {"Authorization": f"Bearer {token}"}
     params = {"latitude": latitude, "longitude": longitude, "radius": radius}
 
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(url, headers=headers, params=params, timeout=20)
     response.raise_for_status()
     data = response.json()
 
@@ -139,7 +139,7 @@ def get_airport_name_from_iata(iata_code: str) -> str:
     params = {"keyword": iata_code, "subType": "AIRPORT"}
     headers = {"Authorization": f"Bearer {token}"}
 
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(url, headers=headers, params=params, timeout=20)
     response.raise_for_status()
     data = response.json()
 
@@ -174,7 +174,7 @@ def check_flight_status(flight_number: str, scheduled_date: str) -> str:
         "scheduledDepartureDate": scheduled_date,
     }
 
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(url, headers=headers, params=params, timeout=20)
     response.raise_for_status()
     data = response.json()
 
@@ -224,7 +224,7 @@ def get_checkin_links(airline_code: str) -> str:
     params = {"airlineCode": airline_code}
 
     try:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(url, headers=headers, params=params, timeout=20)
         response.raise_for_status()
         data = response.json()
 
@@ -276,7 +276,7 @@ def book_flight_manually(
         params["travelClass"] = travelClass
 
     headers = {"Authorization": f"Bearer {token}"}
-    response = requests.get(url, params=params, headers=headers)
+    response = requests.get(url, params=params, headers=headers, timeout=20)
     response.raise_for_status()
 
     data = response.json()
@@ -338,7 +338,7 @@ def get_checkin_links(
     }
 
     try:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(url, headers=headers, params=params, timeout=20)
         response.raise_for_status()
         data = response.json()
 
@@ -358,6 +358,7 @@ def get_checkin_links(
 
 
 
-result = get_checkin_links.invoke({"airlineCode" : "BA", "language" :"EN"})
+if __name__ == '__main__':
+    print(get_checkin_links.invoke({"airlineCode": "BA", "language": "EN"}))
 
 

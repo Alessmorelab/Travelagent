@@ -1,0 +1,40 @@
+{
+  "name": "roam-wechat-miniapp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "远行 Roam 微信小程序",
+  "scripts": {
+    "dev:weapp": "npm run check:config && taro build --type weapp --watch --no-check",
+    "build:weapp": "npm run check:config && taro build --type weapp --no-check",
+    "check:config": "node scripts/check-config.cjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "check:dist": "node scripts/check-dist.mjs",
+    "check:runtime": "node scripts/check-runtime.cjs"
+  },
+  "dependencies": {
+    "@tarojs/components": "4.3.0",
+    "@tarojs/helper": "4.3.0",
+    "@tarojs/plugin-framework-react": "4.3.0",
+    "@tarojs/plugin-platform-weapp": "4.3.0",
+    "@tarojs/react": "4.3.0",
+    "@tarojs/runtime": "4.3.0",
+    "@tarojs/shared": "4.3.0",
+    "@tarojs/taro": "4.3.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/preset-react": "^7.29.7",
+    "@babel/preset-typescript": "^7.29.7",
+    "@tarojs/cli": "4.3.0",
+    "@tarojs/webpack5-runner": "4.3.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "babel-preset-taro": "4.3.0",
+    "sass": "^1.83.0",
+    "typescript": "^5.9.2",
+    "webpack": "5.91.0"
+  }
+}

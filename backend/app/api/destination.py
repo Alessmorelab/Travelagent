@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Query
 from langchain_core.messages import HumanMessage
-from src.agents.destination_agent import destination_graph
 from src.agents.agent_utils import State
 from langgraph.types import Command
 from datetime import datetime, timezone
@@ -10,7 +9,7 @@ from pydantic import BaseModel
 
 class Inputs(BaseModel) : 
     query : str  
-    thread_id : str = Query(default=None) 
+    thread_id : str | None = None
     
 router = APIRouter()
 
@@ -18,6 +17,7 @@ destination_conversations = {}
 
 @router.post("/search")
 async def search_destinations(inputs:Inputs):
+    from src.agents.destination_agent import destination_graph
     thread_id = inputs.thread_id
     if not thread_id:
         thread_id = str(uuid.uuid4())
@@ -25,7 +25,7 @@ async def search_destinations(inputs:Inputs):
     
     messages = destination_conversations.get(thread_id, [])
     
-    messages.append(HumanMessage(content=inputs.thread_id))
+    messages.append(HumanMessage(content=inputs.query))
     
     state = State(messages=messages)
     

@@ -38,7 +38,7 @@ def city_search_amadeus(input: CitySearchInput) -> dict:
     response = requests.get(
         "https://test.api.amadeus.com/v1/reference-data/locations/cities",
         headers=headers,
-        params=params
+        params=params, timeout=20
     )
     
     if response.status_code != 200:
@@ -70,7 +70,7 @@ def get_tours_and_activities(input: ActivitiesInput) -> dict:
     response = requests.get(
         "https://test.api.amadeus.com/v1/shopping/activities",
         headers=headers,
-        params=params
+        params=params, timeout=20
     )
 
     if response.status_code != 200:
@@ -100,7 +100,7 @@ def get_city_coordinates(input: CitySearchInput)-> Dict :
     response = requests.get(
         "https://test.api.amadeus.com/v1/reference-data/locations/cities",
         headers=headers,
-        params=params
+        params=params, timeout=20
     )
     
     if response.status_code != 200:
@@ -112,7 +112,7 @@ def get_city_coordinates(input: CitySearchInput)-> Dict :
 def get_user_location(_: dict = {}) -> Dict:
     """Gets the user's current location using their IP address."""
     try:
-        response = requests.get("http://ip-api.com/json/")
+        response = requests.get("http://ip-api.com/json/", timeout=15)
         if response.status_code == 200:
             data = response.json()
             return {
@@ -125,8 +125,10 @@ def get_user_location(_: dict = {}) -> Dict:
         return {"error": str(e)}
     
     
-tavily_search_tool = TavilySearch(
-    max_results=5,
-    topic="general",
-) 
-
+@tool
+def tavily_search_tool(query: str) -> dict:
+    """Search the web for additional travel information when requested."""
+    import os
+    if not os.getenv("TAVILY_API_KEY"):
+        return {"error": "Web search is not configured on this server"}
+    return TavilySearch(max_results=5, topic="general").invoke({"query": query})

@@ -22,7 +22,7 @@ def get_amadeus_token() -> str:
         "client_id": os.getenv("AMADEUS_CLIENT_ID"),
         "client_secret": os.getenv("AMADEUS_CLIENT_SECRET"),
     }
-    response = requests.post(url, data=payload)
+    response = requests.post(url, data=payload, timeout=15)
     response.raise_for_status()
     return response.json()["access_token"]
 

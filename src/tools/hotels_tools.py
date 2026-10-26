@@ -59,7 +59,7 @@ def search_hotels(input_data: HotelSearchInput) -> List[dict]:
         "radius": input_data.radius,
     }
 
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(url, headers=headers, params=params, timeout=20)
     response.raise_for_status()
     result = []
     for item in response.json().get("data", []):
@@ -106,7 +106,7 @@ def get_hotel_offers(input_data: HotelOffer) -> List[Dict]:
         params["countryOfResidence"] = input_data.countryOfResidence
 
     try:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(url, headers=headers, params=params, timeout=20)
         response.raise_for_status()  # Raises HTTPError for 4xx/5xx
     except requests.exceptions.HTTPError as http_err:
         try:
@@ -147,7 +147,10 @@ def get_hotel_offers(input_data: HotelOffer) -> List[Dict]:
     return results
 
 
-tavily_search_tool = TavilySearch(
-    max_results=5,
-    topic="general",
-) 
+@tool
+def tavily_search_tool(query: str) -> dict:
+    """Search the web for additional travel information when requested."""
+    import os
+    if not os.getenv("TAVILY_API_KEY"):
+        return {"error": "Web search is not configured on this server"}
+    return TavilySearch(max_results=5, topic="general").invoke({"query": query})
