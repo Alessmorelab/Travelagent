@@ -145,3 +145,35 @@ test('等待超时后可再次发送，且不生成虚假的查询结果', async
   assert.match(store.getState().error, /超时/); assert.equal(store.getState().busy, false);
   assert.equal(store.getState().messages.filter((m) => m.role === 'assistant').length, 0);
 });
+
+test('每条回复保留自己的查询步骤，恢复历史后仍可查看', async (t) => {
+  let round = 0;
+  const { store, storage } = await fixture({ stream: async (_input, emit) => {
+    round++;
+    emit({ type: 'status', key: 'search', label: `查询地点${round}`, kind: 'tool', state: 'running' });
+    emit({ type: 'status', key: 'route', label: `查询路线${round}`, kind: 'tool', state: 'running' });
+    emit({ type: 'status', key: 'search', label: `查询地点${round}`, kind: 'tool', state: 'complete' });
+    emit({ type: 'status', key: 'route', label: `查询路线${round}`, kind: 'tool', state: 'complete' });
+    return { response: `结果${round}`, thread_id: 'thread' };
+  } });
+  t.after(() => store.dispose());
+  store.setConnection({ mode: 'live', apiUrl: 'https://travel.example' });
+  await store.sendMessage('第一问'); await store.sendMessage('第二问'); await store.flush();
+  const replies = store.getState().messages.filter((message) => message.role === 'assistant');
+  assert.deepEqual(replies.map((message) => message.progress.map((step) => step.label)), [['查询地点1', '查询路线1'], ['查询地点2', '查询路线2']]);
+  assert.ok(replies.every((message) => message.progress.every((step) => step.state === 'complete')));
+  const restored = createTravelStore(storage); t.after(() => restored.dispose()); await restored.hydrate();
+  assert.deepEqual(restored.getState().messages.filter((message) => message.role === 'assistant').map((message) => message.progress), replies.map((message) => message.progress));
+});
+
+test('查询期间出错时保留步骤并标记中断', async (t) => {
+  const { store } = await fixture({ stream: async (_input, emit) => {
+    emit({ type: 'status', key: 'search', label: '查询地点', state: 'running' });
+    throw new Error('网络中断');
+  } });
+  t.after(() => store.dispose()); store.setConnection({ mode: 'live', apiUrl: 'https://travel.example' });
+  await store.sendMessage('查景点');
+  const reply = store.getState().messages.at(-1);
+  assert.equal(reply.status, 'interrupted'); assert.equal(reply.progress[0].state, 'interrupted');
+  assert.equal(store.getState().error, '网络中断');
+});

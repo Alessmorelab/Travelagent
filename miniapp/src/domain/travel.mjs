@@ -105,7 +105,8 @@ export function createTravelStore(storage, options = {}) {
   const update = (patch, save = false) => { state = { ...state, ...patch }; emit(); if (save && state.hydrated) persist(); };
   const toast = (message) => { clearTimeout(toastTimer); update({ toast: message }); toastTimer = setTimeout(() => update({ toast: '' }), 3000); toastTimer.unref?.(); };
   const stop = () => { pending?.controller.abort(); pending = null; };
-  const validMessages = (messages) => Array.isArray(messages) ? messages.filter((message) => message && typeof message.id === 'string' && ['user', 'assistant'].includes(message.role) && typeof message.content === 'string' && ['demo', 'live'].includes(message.mode) && AGENTS.some((agent) => agent.id === message.agent)).map((message) => ({ ...message, status: message.status === 'streaming' ? 'interrupted' : message.status })) : [];
+  const validProgress = (steps, interrupted = false) => Array.isArray(steps) ? steps.filter((step) => step && typeof step.key === 'string' && typeof step.label === 'string' && ['running', 'complete', 'interrupted'].includes(step.state)).slice(-24).map((step) => ({ key: step.key.slice(0, 128), label: step.label.slice(0, 120), kind: step.kind === 'tool' ? 'tool' : 'task', state: interrupted && step.state === 'running' ? 'interrupted' : step.state })) : [];
+  const validMessages = (messages) => Array.isArray(messages) ? messages.filter((message) => message && typeof message.id === 'string' && ['user', 'assistant'].includes(message.role) && typeof message.content === 'string' && ['demo', 'live'].includes(message.mode) && AGENTS.some((agent) => agent.id === message.agent)).map((message) => ({ ...message, status: message.status === 'streaming' ? 'interrupted' : message.status, progress: validProgress(message.progress, true) })) : [];
   const currentChat = (agent = state.agent) => {
     const messages = state.messages.filter((message) => message.agent === agent);
     if (!messages.length) return null;
@@ -202,7 +203,7 @@ export function createTravelStore(storage, options = {}) {
       pending = request;
       const messages = retry ? state.messages.filter((message) => message.id !== request.id) : [...state.messages, { id: uid(), role: 'user', content: query, agent, mode: connection.mode }];
       const streaming = (connection.mode === 'live' && options.stream) || (connection.mode === 'demo' && options.demoStreaming);
-      if (streaming) messages.push({ id: request.id, role: 'assistant', content: '', agent, mode: connection.mode, status: 'streaming' });
+      if (streaming) messages.push({ id: request.id, role: 'assistant', content: '', agent, mode: connection.mode, status: 'streaming', progress: [] });
       update({ tab: 'assistant', messages, busy: true, error: '', progress: [], lastQuery: query, lastRequestId: request.id,
         activeChats: { ...state.activeChats, [agent]: state.activeChats[agent] || uid() } }, true);
       const onEvent = (event) => {
@@ -210,8 +211,13 @@ export function createTravelStore(storage, options = {}) {
         if (event.type === 'accepted' && typeof event.conversation_id === 'string') {
           update({ threads: { ...state.threads, [agent]: event.conversation_id }, activeChats: { ...state.activeChats, [agent]: event.conversation_id } }, true);
         } else if (event.type === 'status') {
-          const steps = state.progress.filter((step) => step.key !== event.key);
-          update({ progress: [...steps, { key: String(event.key), label: String(event.label), state: event.state }].slice(-12) });
+          const step = validProgress([event])[0];
+          if (!step) return;
+          const steps = [...state.progress];
+          const index = steps.findIndex((item) => item.key === step.key);
+          if (index < 0) steps.push(step); else steps[index] = step;
+          const progress = steps.slice(-24);
+          update({ progress, messages: state.messages.map((message) => message.id === request.id ? { ...message, progress } : message) }, true);
         } else if (['delta', 'final'].includes(event.type) && typeof event.content === 'string') {
           update({ messages: state.messages.map((message) => message.id === request.id ? { ...message, content: event.type === 'delta' ? message.content + event.content : event.content } : message) });
         }
@@ -254,15 +260,15 @@ export function createTravelStore(storage, options = {}) {
           }
         }
         if (pending !== request || request.controller.signal.aborted) return;
-        update({ messages: streaming ? state.messages.map((message) => message.id === request.id ? { ...message, content, status: 'complete' } : message) : [...state.messages, { id: uid(), role: 'assistant', content, agent, mode: connection.mode }], threads: typeof threadId === 'string' && threadId ? { ...state.threads, [agent]: threadId } : state.threads }, true);
+        update({ messages: streaming ? state.messages.map((message) => message.id === request.id ? { ...message, content, status: 'complete', progress: validProgress(state.progress.map((step) => step.state === 'running' ? { ...step, state: 'complete' } : step)) } : message) : [...state.messages, { id: uid(), role: 'assistant', content, agent, mode: connection.mode }], threads: typeof threadId === 'string' && threadId ? { ...state.threads, [agent]: threadId } : state.threads }, true);
       } catch (error) {
-        if (pending === request) update({ progress: state.progress.map((step) => step.state === 'running' ? { ...step, state: 'interrupted' } : step), messages: state.messages.filter((message) => message.id !== request.id || message.content).map((message) => message.id === request.id ? { ...message, status: 'interrupted' } : message), error: error.name === 'AbortError' ? '等待回复超时，可以重试或检查后端服务' : error.message === 'Failed to fetch' ? '暂时无法连接服务，请在「我的」检查服务地址' : error.message }, true);
+        if (pending === request) update({ progress: state.progress.map((step) => step.state === 'running' ? { ...step, state: 'interrupted' } : step), messages: state.messages.filter((message) => message.id !== request.id || message.content || message.progress?.length).map((message) => message.id === request.id ? { ...message, status: 'interrupted', progress: validProgress(message.progress, true) } : message), error: error.name === 'AbortError' ? '等待回复超时，可以重试或检查后端服务' : error.message === 'Failed to fetch' ? '暂时无法连接服务，请在「我的」检查服务地址' : error.message }, true);
       } finally {
         clearTimeout(timeout);
         if (pending === request) { pending = null; update({ busy: false }); }
       }
     },
-    cancelMessage() { stop(); update({ busy: false, error: '', messages: state.messages.map((message) => message.status === 'streaming' ? { ...message, status: 'interrupted' } : message), progress: state.progress.map((step) => step.state === 'running' ? { ...step, state: 'interrupted' } : step) }, true); toast('已停止回复'); },
+    cancelMessage() { stop(); update({ busy: false, error: '', messages: state.messages.map((message) => message.status === 'streaming' ? { ...message, status: 'interrupted', progress: validProgress(message.progress, true) } : message), progress: state.progress.map((step) => step.state === 'running' ? { ...step, state: 'interrupted' } : step) }, true); toast('已停止回复'); },
     newConversation(agent = state.agent) {
       if (state.busy) { toast('请先停止等待，再开启新对话'); return; }
       if (!AGENTS.some((item) => item.id === agent)) return;

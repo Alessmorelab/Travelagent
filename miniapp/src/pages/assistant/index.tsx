@@ -9,13 +9,19 @@ import { ChatComposer, ChatMessage, HistorySheet } from '../../chat-components';
 const starters = [
   { icon: '⌖', title: '规划武汉3天行程', query: '想去武汉玩3天，帮我安排一个不赶路的行程。' },
   { icon: '↗', title: '黄鹤楼到省博怎么走', query: '帮我查黄鹤楼和湖北省博物馆的位置，以及两地之间怎么走。' },
-  { icon: '☀', title: '武汉明天适合出游吗', query: '武汉明天天气怎么样，适合出门玩吗？' }
+  { icon: '☀', title: '武汉明天适合出游吗', query: '武汉明天天气怎么样，适合出门玩吗？' },
+  { icon: '♡', title: '周末去哪里放松', query: '想找个适合周末放松的地方，有什么建议？' },
+  { icon: '⌖', title: '成都三天怎么玩', query: '帮我规划一份成都三天的旅行建议。' },
+  { icon: '↗', title: '杭州西湖怎么逛', query: '第一次去杭州西湖，帮我安排一天的步行路线。' },
+  { icon: '☀', title: '出发前要准备什么', query: '出门旅行前，有哪些东西和事项需要准备？' },
+  { icon: '♡', title: '两人旅行预算怎么定', query: '两个人旅行，怎么合理安排交通、住宿和餐饮预算？' }
 ];
 type Panel = 'trip' | 'preferences' | 'connection' | 'history' | 'tools' | 'explore' | null;
 
 export default function AssistantPage() {
   const state = useTravelState('assistant');
   const [draft, setDraft] = useState('');
+  const [starterPage, setStarterPage] = useState(0);
   const [detail, setDetail] = useState('');
   const [panel, setPanel] = useState<Panel>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -85,7 +91,8 @@ export default function AssistantPage() {
           : <View className='dialogue-welcome'>
             <View className='welcome-mark'>✦</View><Text className='dialogue-welcome-title'>下一站，想去哪儿？</Text>
             <Text className='dialogue-welcome-description'>说出你的想法，我们一起把旅行计划聊具体。</Text>
-            <View className='conversation-starters'>{starters.map((item) => <Button className='conversation-starter' key={item.title} onClick={() => send(item.query)}><Text className='starter-symbol'>{item.icon}</Text><Text>{item.title}</Text><Text className='starter-arrow'>↗</Text></Button>)}</View>
+            <View className='conversation-starters'>{starters.slice(starterPage * 4, starterPage * 4 + 4).map((item) => <Button className='conversation-starter' key={item.title} onClick={() => send(item.query)}><Text className='starter-symbol'>{item.icon}</Text><Text>{item.title}</Text><Text className='starter-arrow'>↗</Text></Button>)}</View>
+            <Button className='starter-refresh' onClick={() => setStarterPage((page) => (page + 1) % 2)}>换一换 ↻</Button>
             <Button className='inspiration-link' onClick={() => openPanel('explore')}>还没想好？找点旅行灵感 →</Button>
           </View>}
         {state.error && <View className='dialogue-error'><Text>{state.error}</Text><View className='dialogue-error-actions'>

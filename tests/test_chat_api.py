@@ -53,6 +53,9 @@ def test_stream_history_restart_and_device_isolation(tmp_path):
         cid = events[0]['conversation_id']
         detail = client.get('/api/v1/chat/conversations/' + cid, headers=headers).json()
         assert [item['content'] for item in detail['messages']] == ['规划京都旅行', '京都旅行建议']
+        assert detail['messages'][-1]['progress'] == [
+            {'key': 'hotel', 'label': '查询住宿', 'kind': 'task', 'state': 'complete'}
+        ]
         collect(client, start(token, 'request-2', cid, '改成三天'))
         assert len(calls[1][1]) == 2
         assert '武汉出发' in calls[1][1][0]['content']
@@ -65,6 +68,7 @@ def test_stream_history_restart_and_device_isolation(tmp_path):
         records = restarted.get('/api/v1/chat/conversations', headers=headers).json()['conversations']
         assert len(records) == 1 and records[0]['id'] == cid
         assert restarted.get('/api/v1/chat/conversations/' + cid, headers=headers).json()['messages'][-1]['content'] == '京都旅行建议'
+        assert restarted.get('/api/v1/chat/conversations/' + cid, headers=headers).json()['messages'][1]['progress'][0]['label'] == '查询住宿'
         assert restarted.delete('/api/v1/chat/conversations/' + cid, headers=headers).json()['deleted']
         assert restarted.get('/api/v1/chat/conversations', headers=headers).json()['conversations'] == []
 

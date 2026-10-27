@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Taro from '@tarojs/taro';
 import { Button, RichText, Text, Textarea, View } from '@tarojs/components';
-import type { ChatSnapshot, Message, State } from './domain/travel.mjs';
+import type { ChatSnapshot, Message, Progress, State } from './domain/travel.mjs';
 import { AGENTS } from './domain/travel.mjs';
 import type { RemoteConversation } from './services/chat-client.mjs';
 import { AgentChoices, Sheet } from './components';
@@ -38,9 +38,9 @@ export function ChatMessage({ message, state, latest }: { message: Message; stat
     <View className='assistant-identity'><View className='assistant-mark'>✦</View><Text>远行</Text>
       {message.mode === 'demo' && <Text className='message-mode'>示例</Text>}
     </View>
-    {latest && <TaskProgress state={state} />}
+    <TaskProgress steps={message.progress || (latest ? state.progress : [])} busy={latest && state.busy} requestId={message.id} />
     {message.content ? <RichText className='assistant-answer' nodes={formatted} userSelect />
-      : state.busy && latest ? <View className='reply-pending' ariaLabel='正在准备回复'><View /><View /><View /></View>
+      : state.busy && latest ? <View className='reply-pending' ariaLabel='正在准备回复'><View /><View /><View /><View /></View>
       : <Text className='reply-stopped'>回复已停止</Text>}
     {message.status === 'streaming' && !!message.content && <Text className='stream-cursor'>▍</Text>}
     {interrupted && !!message.content && <Text className='reply-stopped'>回复未完成</Text>}
@@ -51,24 +51,24 @@ export function ChatMessage({ message, state, latest }: { message: Message; stat
   </View>;
 }
 
-export function TaskProgress({ state }: { state: State }) {
+export function TaskProgress({ steps, busy, requestId }: { steps: Progress[]; busy: boolean; requestId: string }) {
   const [expanded, setExpanded] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  useEffect(() => { setExpanded(false); }, [state.lastRequestId]);
+  useEffect(() => { setExpanded(false); }, [requestId]);
   useEffect(() => {
-    if (!state.busy) return;
+    if (!busy) return;
     setElapsed(0); const start = Date.now();
     const timer = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
     return () => clearInterval(timer);
-  }, [state.busy]);
-  if (!state.progress.length) return null;
-  const running = state.progress.filter((step) => step.state === 'running').at(-1);
+  }, [busy]);
+  if (!steps.length) return null;
+  const running = steps.filter((step) => step.state === 'running').at(-1);
   return <View className='reply-progress'>
     <Button className='progress-toggle' onClick={() => setExpanded(!expanded)} ariaLabel={expanded ? '收起查询进度' : '展开查询进度'}>
-      {state.busy && <View className='thinking-dot' />}<Text>{state.busy ? running?.label || '正在整理回复' : '查看查询过程'}</Text>
-      {state.busy && elapsed > 0 && <Text className='progress-time'>{elapsed}秒</Text>}<Text className='progress-chevron'>{expanded ? '⌃' : '⌄'}</Text>
+      {busy && <View className='thinking-dot' />}<Text>{busy ? running?.label || '正在整理回复' : `查询过程 · ${steps.length} 步`}</Text>
+      {busy && elapsed > 0 && <Text className='progress-time'>{elapsed}秒</Text>}<Text className='progress-chevron'>{expanded ? '⌃' : '⌄'}</Text>
     </Button>
-    {expanded && <View className='progress-details'>{state.progress.map((step) => <View className={`task-step ${step.state}`} key={step.key}><Text>{step.state === 'complete' ? '✓' : step.state === 'interrupted' ? '·' : '◌'}</Text><Text>{step.label}</Text></View>)}</View>}
+    {expanded && <View className='progress-details'>{steps.map((step) => <View className={`task-step ${step.state}`} key={step.key}><Text>{step.state === 'complete' ? '✓' : step.state === 'interrupted' ? '·' : '◌'}</Text><Text>{step.label}</Text></View>)}</View>}
   </View>;
 }
 
