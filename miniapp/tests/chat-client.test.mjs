@@ -167,3 +167,19 @@ test('从专业助手开启统一新对话时保留原有示例历史', async (t
   store.setAgent('hotels');
   assert.equal(store.getChatHistory()[0].title, '附近住哪里');
 });
+
+test('地图查询使用安装凭证并拒绝未转换或无效坐标', async () => {
+  const storage = { async getItem() { return null; }, async setItem() {} };
+  const requests = [];
+  let coordinateSystem = 'gcj02';
+  const client = createChatClient({ storage, connectSocket() {}, fetch: async (url, init) => {
+    requests.push({ url, init });
+    return { ok: true, status: 200, async json() { return url.endsWith('/devices') ? { token: 'test-token' } : { source: '百度地图', retrieved_at: 'test', coordinate_system: coordinateSystem, places: [{ name: '黄鹤楼', address: '武汉', latitude: 30.5, longitude: 114.3 }] }; } };
+  } });
+  const result = await client.searchPlaces('https://travel.example', '武汉', '黄鹤楼');
+  assert.equal(result.places[0].name, '黄鹤楼');
+  assert.equal(requests.at(-1).init.headers.Authorization, 'Bearer test-token');
+  assert.deepEqual(JSON.parse(requests.at(-1).init.body), { city: '武汉', query: '黄鹤楼' });
+  coordinateSystem = 'bd09ll';
+  await assert.rejects(client.searchPlaces('https://travel.example', '武汉', '黄鹤楼'), /格式异常/);
+});

@@ -35,6 +35,22 @@ export function createChatClient({ fetch, storage, connectSocket }) {
     return data;
   };
   return {
+    async searchPlaces(apiUrl, city, query) {
+      const token = await tokenFor(apiUrl);
+      const response = await fetch(`${apiUrl}/api/v1/map/places`, { method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ city, query }) });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 401) await forgetToken(apiUrl);
+        throw new Error(typeof data.detail === 'string' ? data.detail : '地点查询失败，请重试');
+      }
+      if (typeof data.source !== 'string' || typeof data.retrieved_at !== 'string' || data.coordinate_system !== 'gcj02' || !Array.isArray(data.places) || data.places.length > 5 || data.places.some((place) =>
+        !place || typeof place.name !== 'string' || typeof place.address !== 'string' || typeof place.latitude !== 'number' || !Number.isFinite(place.latitude)
+        || typeof place.longitude !== 'number' || !Number.isFinite(place.longitude) || Math.abs(place.latitude) > 90 || Math.abs(place.longitude) > 180)) {
+        throw new Error('地点数据格式异常，无法在地图上显示');
+      }
+      return data;
+    },
     async list(apiUrl, agent) {
       const data = await request(apiUrl, `/conversations?agent=${agent}`);
       if (!Array.isArray(data.conversations) || data.conversations.some((item) => !item || typeof item.id !== 'string' || typeof item.title !== 'string')) throw new Error('服务返回的历史记录格式异常，请检查后端版本');

@@ -134,3 +134,43 @@ async def test_real_graph_calls_baidu_tool_and_reports_only_public_events(monkey
     assert any(item.get('label') == '百度地图：查询天气' for item in events)
     assert 'PRIVATE_WORKER' not in str(events) and 'private-ak' not in str(events)
     assert next(item for item in events if item['type'] == 'final')['content'] == '武汉天气晴，来源：百度地图。'
+
+
+def test_wechat_markers_use_official_conversion_and_never_expose_ak():
+    calls = []
+    def transport(url, **kwargs):
+        parsed = urlsplit(url); params = parse_qs(parsed.query); calls.append((parsed.path, params))
+        if parsed.path == '/place/v2/search':
+            return response({'status': 0, 'results': [{'name': '黄鹤楼', 'address': '武汉', 'location': {'lat': 30.5, 'lng': 114.3}}]})
+        assert parsed.path == '/geoconv/v2/' and params['model'] == ['5']
+        assert params['coords'] == ['114.3,30.5']
+        return response({'status': 0, 'result': [{'x': 114.29, 'y': 30.49}]})
+    result = BaiduMaps('private-ak', transport=transport).search_for_wechat('黄鹤楼', '武汉')
+    assert result['coordinate_system'] == 'gcj02'
+    assert result['places'] == [{'name': '黄鹤楼', 'address': '武汉', 'longitude': 114.29, 'latitude': 30.49}]
+    assert 'private-ak' not in json.dumps(result)
+
+
+def test_conversion_failure_never_returns_unconverted_markers():
+    def transport(url, **kwargs):
+        if '/place/v2/search' in url:
+            return response({'status': 0, 'results': [{'name': '地点', 'location': {'lat': 30.5, 'lng': 114.3}}]})
+        return response({'status': 0, 'result': []})
+    with pytest.raises(ToolException, match='坐标转换'):
+        BaiduMaps('private-ak', transport=transport).search_for_wechat('地点', '武汉')
+
+
+def test_map_api_requires_device_auth_and_returns_only_converted_results(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from backend.app.main import app
+    from backend.app.services.chat import get_chat_service
+    monkeypatch.delenv('DATABASE_URL', raising=False)
+    monkeypatch.setenv('TRAVEL_CHAT_DB', str(tmp_path / 'map.sqlite3'))
+    monkeypatch.setattr(BaiduMaps, 'search_for_wechat', lambda self, query, city: {'source': '百度地图', 'retrieved_at': 'test', 'coordinate_system': 'gcj02', 'places': [{'name': query, 'address': city, 'latitude': 30.4, 'longitude': 114.2}]})
+    get_chat_service.cache_clear()
+    with TestClient(app) as client:
+        assert client.post('/api/v1/map/places', json={'city': '武汉', 'query': '黄鹤楼'}).status_code == 401
+        token = client.post('/api/v1/chat/devices').json()['token']
+        result = client.post('/api/v1/map/places', headers={'Authorization': 'Bearer ' + token}, json={'city': '武汉', 'query': '黄鹤楼'})
+        assert result.status_code == 200 and result.json()['places'][0]['name'] == '黄鹤楼'
+        assert result.json()['coordinate_system'] == 'gcj02'

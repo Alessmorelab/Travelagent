@@ -1,6 +1,9 @@
 import type { Agent, Message, StreamTransport, TravelFetch } from '../domain/travel.mjs';
 export type RemoteConversation = { id: string; title: string; agent: Agent; updated: number; messages?: Message[] };
+export type MapPlace = { name: string; address: string; latitude: number; longitude: number };
+export type MapSearchResult = { source: string; retrieved_at: string; coordinate_system: 'gcj02'; places: MapPlace[] };
 export function createChatClient(options: { fetch: TravelFetch; storage: { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<void> }; connectSocket(options: any): any }): {
+  searchPlaces(apiUrl: string, city: string, query: string): Promise<MapSearchResult>;
   stream: StreamTransport;
   list(apiUrl: string, agent: Agent): Promise<RemoteConversation[]>;
   get(apiUrl: string, id: string): Promise<RemoteConversation & { messages: Message[] }>;

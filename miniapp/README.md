@@ -95,4 +95,4 @@ python3.12 -m venv .venv
 
 参考：[Taro 编译与微信开发者工具导入](https://docs.taro.zone/docs/GETTING-STARTED/)。
 
-系统以 [Jevon-Zhong/agent-trip-planner](https://github.com/Jevon-Zhong/agent-trip-planner) 为架构参考，采用小程序、FastAPI、WebSocket、LangGraph 和 PostgreSQL 的前后端分离方案。现有小程序继续使用 Taro + React，未迁移到其 Vue/Uni-app 技术栈。分层职责、差异和后续扩展见 [架构说明](../docs/architecture.md)。百度地点、国内天气和路线支持后端 MCP 与直接 Web API 两种接入，需填写服务端 AK、开通查询权限并通过实际业务验证；小程序内尚未绘制地图。微信账号登录、高铁余票和语音尚未接入。
+系统以 [Jevon-Zhong/agent-trip-planner](https://github.com/Jevon-Zhong/agent-trip-planner) 为架构参考，采用小程序、FastAPI、WebSocket、LangGraph 和 PostgreSQL 的前后端分离方案。现有小程序继续使用 Taro + React，未迁移到其 Vue/Uni-app 技术栈。分层职责、差异和后续扩展见 [架构说明](../docs/architecture.md)。百度地点、国内天气和路线支持后端 MCP 与直接 Web API 两种接入，需填写服务端 AK、开通查询权限并通过实际业务验证；小程序行程页支持手动搜索地点并标记地图；该功能使用百度地点检索及坐标转换 Web API，需开通相应服务，路线绘制尚未接入。微信账号登录、高铁余票和语音尚未接入。

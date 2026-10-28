@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import math
 import os
 import re
 import time
@@ -93,12 +94,40 @@ class BaiduMaps:
         places = []
         for item in data.get('results', [])[:limit]:
             location = item.get('location') or {}
-            if not isinstance(location.get('lat'), (int, float)) or not isinstance(location.get('lng'), (int, float)):
+            lat, lon = location.get('lat'), location.get('lng')
+            if (isinstance(lat, bool) or isinstance(lon, bool) or not isinstance(lat, (int, float))
+                    or not isinstance(lon, (int, float)) or not math.isfinite(lat) or not math.isfinite(lon)
+                    or not -90 <= lat <= 90 or not -180 <= lon <= 180):
                 continue
             places.append({key: item[key] for key in ['uid', 'name', 'address', 'province', 'city', 'area', 'adcode'] if key in item}
                           | {'latitude': location['lat'], 'longitude': location['lng'], 'coordinate_system': 'bd09ll'})
         return provenance() | {'query': query, 'city': city, 'places': places,
                                'note': '地点信息不代表实时房态、机票库存、门票或酒店预订报价；坐标为百度 BD-09。'}
+
+    def search_for_wechat(self, query: str, city: str, limit: int = 5):
+        """Return only searched places whose BD-09 coordinates were converted by Baidu."""
+        result = self.search(query, city, limit)
+        places = [place for place in result['places'] if isinstance(place.get('name'), str) and place['name'].strip()]
+        if not places:
+            return provenance() | {'places': [], 'coordinate_system': 'gcj02'}
+        coords = ';'.join(f"{place['longitude']},{place['latitude']}" for place in places)
+        converted = self.request('/geoconv/v2/', {'coords': coords, 'model': 5}).get('result')
+        if not isinstance(converted, list) or len(converted) != len(places):
+            raise ToolException('地图坐标转换未返回完整结果，请检查百度坐标转换服务')
+        markers = []
+        for place, point in zip(places, converted):
+            if not isinstance(point, dict):
+                raise ToolException('地图坐标转换结果无效，请稍后重试')
+            lon, lat = point.get('x'), point.get('y')
+            if (isinstance(lon, bool) or isinstance(lat, bool) or not isinstance(lon, (int, float))
+                    or not isinstance(lat, (int, float)) or not math.isfinite(lon) or not math.isfinite(lat)
+                    or not -180 <= lon <= 180 or not -90 <= lat <= 90):
+                raise ToolException('地图坐标转换结果无效，请稍后重试')
+            markers.append({'name': str(place.get('name') or '地点')[:100],
+                            'address': str(place.get('address') or '')[:200],
+                            'latitude': lat, 'longitude': lon})
+        return {'source': result['source'], 'retrieved_at': result['retrieved_at'],
+                'coordinate_system': 'gcj02', 'places': markers}
 
     def weather(self, city: str, district: str = ''):
         data = self.request('/weather/v1/', {'city': city, 'district': district or city, 'data_type': 'all'})

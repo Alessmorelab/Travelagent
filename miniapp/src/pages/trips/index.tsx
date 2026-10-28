@@ -1,10 +1,46 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Taro, { useDidShow } from '@tarojs/taro';
-import { Button, Input, ScrollView, Text, Textarea, View } from '@tarojs/components';
+import { Button, Input, Map, ScrollView, Text, Textarea, View } from '@tarojs/components';
 import { DESTINATIONS, dayCount, formatDate } from '../../domain/travel.mjs';
-import type { Activity, Trip } from '../../domain/travel.mjs';
+import type { Activity, State, Trip } from '../../domain/travel.mjs';
 import { Empty, Icon, PageHeading, PreferenceSheet, Scenic, Sheet, Toast } from '../../components';
-import { sendQuery, store, useTravelState } from '../../stores/travel';
+import { chatClient, sendQuery, store, useTravelState } from '../../stores/travel';
+
+function PlaceMapView({ state, initialCity, onClose }: { state: State; initialCity: string; onClose: () => void }) {
+  const [city, setCity] = useState(initialCity);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<Awaited<ReturnType<typeof chatClient.searchPlaces>> | null>(null);
+  const active = useRef(true);
+  useEffect(() => () => { active.current = false; }, []);
+  const search = async () => {
+    const cityValue = city.trim(), queryValue = query.trim();
+    if (!cityValue || !queryValue) { setError('请填写城市和地点关键词'); return; }
+    if (state.connection.mode !== 'live') { setError('请先在「我的 → 旅行服务」连接真实服务'); return; }
+    setLoading(true); setError(''); setResult(null);
+    try { const data = await chatClient.searchPlaces(state.connection.apiUrl, cityValue, queryValue); if (active.current) setResult(data); }
+    catch (e) { if (active.current) setError((e as Error).message || '地点查询失败'); }
+    finally { if (active.current) setLoading(false); }
+  };
+  const places = result?.places || [];
+  const markers = places.map((place, index) => ({ id: index + 1, latitude: place.latitude, longitude: place.longitude,
+    title: place.name, iconPath: '/assets/tabs/map-active.png', width: 28, height: 28 }));
+  return <View className='page place-map-page'>
+    <View className='place-map-heading'><Button className='text-button' onClick={onClose}>← 返回行程</Button><Text>地点地图</Text></View>
+    <Text className='sheet-description'>查询实际地点后在地图上标记，地点和坐标由百度地图提供。</Text>
+    <View className='form-row'><View className='form-field'><Text className='field-label'>城市</Text><Input className='form-input' value={city} maxlength={50} placeholder='例如武汉' onInput={(event) => setCity(event.detail.value)} /></View>
+      <View className='form-field'><Text className='field-label'>地点关键词</Text><Input className='form-input' value={query} maxlength={45} placeholder='例如黄鹤楼' onInput={(event) => setQuery(event.detail.value)} /></View></View>
+    <Button className='primary-button' loading={loading} disabled={loading} onClick={() => void search()}>{loading ? '正在查询' : '查询地点'}</Button>
+    {error && <Text className='form-error'>{error}</Text>}
+    {result && !places.length && <Text className='note'>未查到符合条件的地点，请调整关键词。</Text>}
+    {!!places.length && <><Map className='place-map' latitude={places[0].latitude} longitude={places[0].longitude} markers={markers}
+      includePoints={places.map((place) => ({ latitude: place.latitude, longitude: place.longitude }))} scale={12} onError={() => setError('地图加载失败，请检查微信开发者工具或网络')} />
+      <Text className='note'>来源：{result?.source} · 查询时间：{result?.retrieved_at}</Text>
+      {places.map((place, index) => <View className='place-map-result' key={`${index}-${place.name}`}><Text>{place.name}</Text><Text>{place.address || '地址未提供'}</Text></View>)}
+    </>}
+  </View>;
+}
 
 function ActivitySheet({ trip, day, index, onClose }: { trip: Trip; day: number; index: number; onClose: () => void }) {
   const existing = index >= 0 ? trip.days[day]?.[index] : undefined;
@@ -33,6 +69,7 @@ export default function TripsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [showSource, setShowSource] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   useDidShow(() => { const id = store.getState().focusTripId; if (id) { setSelectedId(id); store.clearTripFocus(); } });
   const trip = state.trips.find((item) => item.id === selectedId) || state.trips[0];
   const destination = DESTINATIONS.find((item) => item.id === trip?.destinationId);
@@ -50,7 +87,8 @@ export default function TripsPage() {
     store.setAgent('team');
     sendQuery(`帮我完善${trip.destination}的${dayCount(trip)}天旅行计划。${details ? details + '。' : ''}请先确认交通与住宿需求。`);
   };
-  return <View className='page'><PageHeading en='MY JOURNEYS' title='我的行程' subtitle='把期待，变成出发。' action={create} />
+  if (mapOpen) return <PlaceMapView state={state} initialCity={trip?.destination || ''} onClose={() => setMapOpen(false)} />;
+  return <View className='page'><PageHeading en='MY JOURNEYS' title='我的行程' subtitle='把期待，变成出发。' action={create} /><Button className='text-button' onClick={() => setMapOpen(true)}>⌖ 地点地图</Button>
     {!trip ? <Empty icon='map' title='下一站，还在等你' description='创建一份行程草稿，慢慢填满旅途的每一天。' action='新建行程' onClick={create} /> : <>
       {state.trips.length > 1 && <ScrollView scrollX className='trip-select'>{state.trips.map((item) => <Button key={item.id} className={item.id === trip.id ? 'active' : ''} onClick={() => { setSelectedId(item.id); store.setActiveDay(0); }}>{item.title}</Button>)}</ScrollView>}
       <Scenic destination={destination} className='trip-cover'><View className='trip-cover-copy'><Text className='trip-status'>{trip.sample ? '示例行程 · 待核对' : '行程草稿 · 待完善'}</Text><Text className='trip-title'>{trip.title}</Text><Text>{trip.startDate ? `${formatDate(trip.startDate)} — ${formatDate(trip.endDate)}` : '日期待填写'} · {trip.travelers ? `${trip.travelers}人同行` : '人数待填写'}</Text></View></Scenic>

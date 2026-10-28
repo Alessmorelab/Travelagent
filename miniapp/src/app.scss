@@ -296,3 +296,8 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .activity-edit-hint { display: block; color: #829574; font-size: 20px; margin-top: 8px; }
 .trip-note-input { height: 180px; padding: 16px 19px; box-sizing: border-box; }
 .trip-source-text { display: block; white-space: pre-wrap; word-break: break-word; font-size: 24px; line-height: 1.8; }
+.place-map-heading { display: flex; align-items: center; gap: 30px; font-size: 32px; font-weight: 600; padding: 20px 0 30px; }
+.place-map { display: block; width: 100%; height: 560px; margin-top: 28px; border-radius: 20px; }
+.place-map-result { padding: 20px 0; border-bottom: 1px solid $line; }
+.place-map-result > text { display: block; font-size: 25px; line-height: 1.7; }
+.place-map-result > text:last-child { color: $muted; font-size: 21px; }
