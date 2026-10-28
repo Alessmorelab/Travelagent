@@ -168,7 +168,8 @@ async def test_mcp_graph_calls_read_only_tool_and_streams_public_progress(monkey
     monkeypatch.setattr(catalog, 'BaiduMCP', lambda: adapter)
     class Worker(FakeMessagesListChatModel):
         def bind_tools(self, tools, **kwargs):
-            assert {tool.name for tool in tools} == {'travel_services_status', 'map_weather'}
+            expected = {'map_weather'} if kwargs.get('tool_choice') == 'required' else {'travel_services_status', 'map_weather'}
+            assert {tool.name for tool in tools} == expected
             return self
     models = iter([Worker(responses=[AIMessage(content='', tool_calls=[{'name': 'map_weather',
         'args': {'district_id': '420106'}, 'id': 'weather', 'type': 'tool_call'}]),

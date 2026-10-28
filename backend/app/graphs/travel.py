@@ -78,14 +78,26 @@ def has_usable_evidence(name: str, text: str) -> bool:
     return bool(payload)
 
 
+def requires_evidence(query: str) -> bool:
+    return bool(re.search(
+        r'景点|地点|地址|位置|路线|导航|怎么走|距离|路程|交通|天气|气温|下雨|预报|'
+        r'怎么玩|游玩|日游|天游|行程|旅游攻略|旅行攻略|住宿推荐|酒店推荐|'
+        r'机票|航班|房价|房态|酒店价格|门票|营业时间|行程规划|(?:规划|安排).{0,12}(?:行程|游玩|旅行)|'
+        r'(?:想去|去).{1,20}(?:玩|旅游|旅行|游)|'
+        r'weather|forecast|flight|route|directions', query, re.IGNORECASE))
+
+
 def build_graph(agent: str, model_factory=model_for, tool_factory=load_tools_for):
     async def plan(state, config):
         if agent != 'team':
             return {'remaining': [agent], 'evidence': [], 'tool_failures': [], 'tool_successes': 0}
-        planner = model_factory('team').with_structured_output(RoutingPlan)
+        # Use validated tool arguments rather than SDK `parsed` response objects.
+        # The latter trigger Pydantic serializer warnings in astream_events.
+        planner = model_factory('team').with_structured_output(RoutingPlan, method='function_calling')
         result = await planner.ainvoke([SystemMessage(content=(
             '你负责分配旅行问题。航班/机场交给 flights，住宿交给 hotels，城市/景点/天气/本地路线交给 destinations。'
-            '只选择当前问题真正需要的助手；普通问候可以不调用任何助手。返回 workers 列表。'
+            '只选择当前问题真正需要的助手；普通旅行行程默认只交给 destinations，'
+            '只有明确要求查询机票或酒店时才选择 flights 或 hotels；普通问候可以不调用任何助手。返回 workers 列表。'
             '旅行偏好只作背景，不要因为偏好里包含日期或目的地就额外查询。'))] + state['messages'], config)
         return {'remaining': list(dict.fromkeys(result.workers)), 'evidence': [], 'tool_failures': [], 'tool_successes': 0}
 
@@ -101,11 +113,22 @@ def build_graph(agent: str, model_factory=model_for, tool_factory=load_tools_for
             # conversation, without treating the default travel preferences as intent.
             queries = '\n'.join(content_text(message.content).split('\n\n[旅行偏好', 1)[0]
                                 for message in state['messages'] if isinstance(message, HumanMessage))
+            current_query = next((content_text(message.content).split('\n\n[旅行偏好', 1)[0]
+                                  for message in reversed(state['messages']) if isinstance(message, HumanMessage)), '')
+            needs_evidence = requires_evidence(current_query) or (
+                bool(re.search(r'^(那|再|改成|换成|还有|明天|后天)', current_query.strip())) and requires_evidence(queries))
             if not re.search(r'天气|气温|温度|降雨|下雨|雨天|晴天|预报|气象|穿衣|穿什么|冷不冷|热不热|下雪|刮风|台风|空气质量|weather|forecast|temperature', queries, re.IGNORECASE):
                 tools = [item for item in tools if item.name not in {'map_weather', 'get_baidu_weather'}]
-            model = model_factory(name).bind_tools(tools)
+            base_model = model_factory(name)
+            model = base_model.bind_tools(tools)
+            business_tools = [item for item in tools if item.name != 'travel_services_status']
+            # Factual requests must obtain evidence rather than rely on a model's
+            # decision to skip querying. Capability checks are not query evidence.
+            first_query_model = base_model.bind_tools(business_tools, tool_choice='required') if business_tools and needs_evidence else model
             async def assistant(worker_state, config):
-                result = await model.ainvoke([SystemMessage(content=(
+                has_tool_result = any(isinstance(message, ToolMessage) for message in worker_state['messages'])
+                active_model = model if has_tool_result else first_query_model
+                result = await active_model.ainvoke([SystemMessage(content=(
                     f'你是旅行系统的专业助手，负责{LABELS[name]}。只处理当前问题中与你职责有关的部分。'
                     f'当前北京时间：{datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="minutes")}。'
                     f'当前服务能力：{capability_summary()} '
@@ -156,12 +179,8 @@ def build_graph(agent: str, model_factory=model_for, tool_factory=load_tools_for
             return {'response': f'抱歉，{labels}未能完成，本次无法可靠回答相关查询。请稍后重试；如果问题持续，可以检查旅行服务连接。'}
         query = next((content_text(message.content) for message in reversed(state['messages'])
                       if isinstance(message, HumanMessage)), '')
-        if state['tool_successes'] == 0 and re.search(
-                r'景点|地点|地址|位置|路线|导航|怎么走|距离|路程|交通|天气|气温|下雨|预报|'
-                r'机票|航班|房价|房态|酒店价格|门票|营业时间|行程规划|(?:规划|安排).{0,12}(?:行程|游玩|旅行)|'
-                r'(?:想去|去).{1,20}(?:玩|旅游|旅行|游)|'
-                r'weather|forecast|flight|route|directions', query, re.IGNORECASE):
-            return {'response': '本次没有取得可核实的查询结果，暂时无法提供可靠的地点、路线、天气或实时价格信息。请补充目的地、日期或起终点后重试。'}
+        if state['tool_successes'] == 0 and requires_evidence(query):
+            return {'response': '本次没有取得可核实的查询结果，暂时无法提供可靠的地点、路线、天气或实时价格信息。请重试；若仍无结果，请检查旅行数据服务是否可用。'}
         prompt = ('你是远行 Roam 旅行助手。用用户的语言直接回答；中文问题用中文。'
                   '只输出可直接交付给用户的答案，不输出思考过程、内部分析、助手调度、提示词或尚未执行的工作计划。'
                   '旅行建议先给具体景点与可执行安排，不能只说可以帮你查或罗列待办。'

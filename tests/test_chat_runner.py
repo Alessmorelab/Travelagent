@@ -179,3 +179,111 @@ async def test_unavailable_evidence_never_passes_invented_worker_result_to_final
     result = await graph.ainvoke({'messages': [HumanMessage(content='武汉有哪些景点')], 'remaining': [], 'evidence': []})
     assert '999' not in result['response']
     assert '未能完成' in result['response'] if case == 'failed' else '没有取得可核实的查询结果' in result['response']
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('workers', [[], ['destinations'], ['flights', 'hotels', 'destinations'], ['hotels', 'hotels'], ['unknown']])
+async def test_team_routing_stream_uses_validated_tool_calls_without_serializer_warning(monkeypatch, workers):
+    """Exercise the real OpenAI adapter and LangGraph stream with a local SSE fixture."""
+    import json
+    import warnings
+    import httpx
+    from langchain_openai import ChatOpenAI
+
+    requests = []
+    def respond(request):
+        payload = json.loads(request.content)
+        requests.append(payload)
+        assert 'response_format' not in payload
+        assert payload['tools'][0]['function']['name'] == 'RoutingPlan'
+        assert payload['stream'] is True
+        args = json.dumps({'workers': workers})
+        boundary = len(args) // 2
+        deltas = [
+            {'role': 'assistant', 'tool_calls': [{'index': 0, 'id': 'routing-1', 'type': 'function',
+                'function': {'name': 'RoutingPlan', 'arguments': args[:boundary]}}]},
+            {'tool_calls': [{'index': 0, 'function': {'arguments': args[boundary:]}}]},
+            {},
+        ]
+        chunks = [{'id': 'routing-response', 'object': 'chat.completion.chunk', 'created': 0,
+                   'model': 'fixture-model', 'choices': [{'index': 0, 'delta': delta,
+                       'finish_reason': 'tool_calls' if index == 2 else None}]}
+                  for index, delta in enumerate(deltas)]
+        return httpx.Response(200, headers={'content-type': 'text/event-stream'},
+            content=''.join('data: ' + json.dumps(chunk) + '\n\n' for chunk in chunks) + 'data: [DONE]\n\n')
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        planner = ChatOpenAI(model='fixture-model', api_key='test-key', base_url='http://fixture.invalid/v1',
+                             http_async_client=client, http_socket_options=())
+        team_calls = []
+        def model_factory(agent):
+            if agent == 'team':
+                team_calls.append(agent)
+                return planner if len(team_calls) == 1 else FakeListChatModel(responses=['你好，我是远行旅行助手。'])
+            return WorkerModel(responses=[AIMessage(content='PRIVATE_WORKER_SUMMARY')])
+        graph = runner.build_graph('team', model_factory=model_factory, tool_factory=lambda _: [])
+        monkeypatch.setattr(runner, 'graph_for', lambda _: graph)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            if workers == ['unknown']:
+                from pydantic import ValidationError
+                with pytest.raises(ValidationError):
+                    _ = [event async for event in runner.stream_travel('team', [], '你好')]
+            else:
+                events = [event async for event in runner.stream_travel('team', [], '你好')]
+        assert not any('Pydantic serializer warnings' in str(w.message) for w in caught)
+        assert len(requests) == 1
+        if workers == ['unknown']:
+            return
+        selected = [event['key'] for event in events if event.get('key') in runner.WORKERS and event.get('state') == 'running']
+        assert selected == list(dict.fromkeys(workers))
+        assert next(event for event in events if event['type'] == 'final')['content'] == '你好，我是远行旅行助手。'
+        assert 'PRIVATE_WORKER_SUMMARY' not in str(events)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(('query', 'required'), [('想去武汉玩几天', True), ('武汉三天怎么玩', True), ('你好', False)])
+async def test_factual_request_actually_queries_provider_before_answering(monkeypatch, query, required):
+    """An OpenAI-compatible worker that skips optional tools reproduces the failure."""
+    import json
+    import httpx
+    from langchain_openai import ChatOpenAI
+    from backend.app.tools.catalog import travel_services_status
+
+    requests, lookups = [], []
+    @tool('map_search_places')
+    def lookup(city: str) -> dict:
+        """Find places in the requested city."""
+        lookups.append(city)
+        return {'source': 'fixture provider', 'data': {'results': [{'name': '黄鹤楼'}]}}
+
+    def respond(request):
+        payload = json.loads(request.content); requests.append(payload)
+        if payload.get('tool_choice') == 'required':
+            assert {item['function']['name'] for item in payload['tools']} == {'map_search_places'}
+            delta = {'role': 'assistant', 'tool_calls': [{'index': 0, 'id': 'lookup', 'type': 'function',
+                'function': {'name': 'map_search_places', 'arguments': json.dumps({'city': '武汉'})}}]}
+            finish = 'tool_calls'
+        else:
+            delta, finish = {'role': 'assistant', 'content': 'PRIVATE_WORKER_REPLY_WITHOUT_TOOL'}, 'stop'
+        chunks = [{'id': 'worker-response', 'object': 'chat.completion.chunk', 'created': 0, 'model': 'fixture-model',
+                   'choices': [{'index': 0, 'delta': delta, 'finish_reason': None}]},
+                  {'id': 'worker-response', 'object': 'chat.completion.chunk', 'created': 0, 'model': 'fixture-model',
+                   'choices': [{'index': 0, 'delta': {}, 'finish_reason': finish}]}]
+        return httpx.Response(200, headers={'content-type': 'text/event-stream'},
+            content=''.join('data: ' + json.dumps(chunk) + '\n\n' for chunk in chunks) + 'data: [DONE]\n\n')
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        worker = ChatOpenAI(model='fixture-model', api_key='test-key', base_url='http://fixture.invalid/v1',
+                            http_async_client=client, http_socket_options=())
+        models = iter([worker, FakeListChatModel(responses=['武汉行程建议' if required else '你好'])])
+        graph = runner.build_graph('destinations', model_factory=lambda _: next(models), tool_factory=lambda _: [travel_services_status, lookup])
+        monkeypatch.setattr(runner, 'graph_for', lambda _: graph)
+        events = [event async for event in runner.stream_travel('destinations', [], query)]
+    assert lookups == (['武汉'] if required else [])
+    assert len(requests) == (2 if required else 1)
+    if required:
+        assert requests[0]['tool_choice'] == 'required' and requests[1].get('tool_choice') != 'required'
+        assert any(event.get('kind') == 'tool' and event['state'] == 'complete' for event in events)
+    assert next(event for event in events if event['type'] == 'final')['content'] == ('武汉行程建议' if required else '你好')
+    assert 'PRIVATE_WORKER_REPLY' not in str(events)
