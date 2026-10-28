@@ -113,3 +113,61 @@ def test_importing_real_tools_does_not_contact_providers(monkeypatch):
         if module in sys.modules:
             importlib.reload(sys.modules[module])
     assert all(runner.tools_for(agent) for agent in runner.WORKERS)
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(('tool_name', 'query', 'payload'), [
+    ('map_search_places', '武汉有哪些景点', {'source': '百度地图 MCP', 'retrieved_at': '2026-10-28', 'data': {'results': [{'name': '黄鹤楼', 'address': '武汉市武昌区'}]}}),
+    ('map_weather', '武汉明天天气怎么样', {'source': '百度地图 MCP', 'retrieved_at': '2026-10-28', 'data': {'forecasts': [{'date': '2026-10-29', 'text_day': '晴'}]}}),
+    ('map_directions', '黄鹤楼到省博怎么走', {'source': '百度地图 MCP', 'retrieved_at': '2026-10-28', 'data': {'routes': [{'distance': 1234}]}}),
+])
+async def test_final_model_receives_real_tool_evidence_not_worker_claim(tool_name, query, payload):
+    import json
+    from langchain_core.messages import HumanMessage
+    captured = []
+
+    @tool(tool_name)
+    def lookup(city: str) -> dict:
+        """Return fixture data for a travel information lookup."""
+        return payload
+
+    class FinalModel(FakeListChatModel):
+        async def ainvoke(self, messages, config=None, **kwargs):
+            captured.append(messages[-1].content)
+            return await super().ainvoke(messages, config=config, **kwargs)
+
+    worker = WorkerModel(responses=[AIMessage(content='', tool_calls=[{'name': tool_name, 'args': {'city': '武汉'}, 'id': 'lookup', 'type': 'tool_call'}]),
+                                    AIMessage(content='WORKER_INVENTED_FACT：门票999元')])
+    models = iter([worker, FinalModel(responses=['根据查询结果回答'])])
+    graph = runner.build_graph('destinations', model_factory=lambda _: next(models), tool_factory=lambda _: [lookup])
+    result = await graph.ainvoke({'messages': [HumanMessage(content=query)], 'remaining': [], 'evidence': []})
+    assert result['response'] == '根据查询结果回答'
+    assert captured and 'WORKER_INVENTED_FACT' not in captured[0] and '门票999元' not in captured[0]
+    assert payload['source'] in captured[0]
+    assert json.dumps(payload, ensure_ascii=False).replace('"', '\\"') in captured[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('case', ['failed', 'empty', 'not_called'])
+async def test_unavailable_evidence_never_passes_invented_worker_result_to_final_model(case):
+    from langchain_core.messages import HumanMessage
+    from langchain_core.tools import ToolException
+
+    @tool('map_search_places')
+    def lookup(city: str) -> dict:
+        """Return an empty result or a safe error."""
+        if case == 'failed':
+            raise ToolException('fixture provider unavailable')
+        return {'source': '百度地图', 'data': {'results': []}}
+
+    calls = [] if case == 'not_called' else [{'name': 'map_search_places', 'args': {'city': '武汉'}, 'id': 'lookup', 'type': 'tool_call'}]
+    responses = [AIMessage(content='', tool_calls=calls), AIMessage(content='伪造：黄鹤楼门票999元')] if calls else [AIMessage(content='伪造：黄鹤楼门票999元')]
+    def model_factory(_):
+        if worker_used:
+            raise AssertionError('No final model should be invoked when no reliable evidence exists')
+        worker_used.append(True)
+        return WorkerModel(responses=responses)
+    worker_used = []
+    graph = runner.build_graph('destinations', model_factory=model_factory, tool_factory=lambda _: [lookup])
+    result = await graph.ainvoke({'messages': [HumanMessage(content='武汉有哪些景点')], 'remaining': [], 'evidence': []})
+    assert '999' not in result['response']
+    assert '未能完成' in result['response'] if case == 'failed' else '没有取得可核实的查询结果' in result['response']

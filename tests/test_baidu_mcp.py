@@ -178,5 +178,5 @@ async def test_mcp_graph_calls_read_only_tool_and_streams_public_progress(monkey
     events = [item async for item in travel.stream_travel('destinations', [], '查询天气')]
     assert any(item.get('label') == '百度地图：查询天气' and item['state'] == 'interrupted' for item in events)
     assert 'PRIVATE_WORKER' not in str(events) and 'private-ak' not in str(events)
-    assert next(item for item in events if item['type'] == 'final')['content'] == '百度地图服务自动开通失败。'
+    assert '未能完成' in next(item for item in events if item['type'] == 'final')['content']
     assert [tool.name for tool in await catalog.load_tools_for('flights')] == ['travel_services_status']
