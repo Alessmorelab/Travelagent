@@ -5,7 +5,6 @@ from fastapi import FastAPI
 from backend.app.core.config import settings
 from backend.app.api.chat import create_chat_router
 from backend.app.services.chat import get_chat_service
-from backend.app.api import flight, hotels, destination , team
 from fastapi.middleware.cors import CORSMiddleware
 import os
 @asynccontextmanager
@@ -34,10 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(flight.router, prefix=f"{settings.API_V1_STR}/flights", tags=["Flights"])
-app.include_router(hotels.router, prefix=f"{settings.API_V1_STR}/hotels", tags=["Hotels"])
-app.include_router(destination.router, prefix=f"{settings.API_V1_STR}/destinations", tags=["Destinations"])
-app.include_router(team.router, prefix=f"{settings.API_V1_STR}/team", tags=["Team"])
 app.include_router(create_chat_router(), prefix=f"{settings.API_V1_STR}/chat", tags=["Chat"])
 
 @app.get("/")

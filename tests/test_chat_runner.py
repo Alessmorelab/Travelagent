@@ -114,6 +114,14 @@ def test_importing_real_tools_does_not_contact_providers(monkeypatch):
             importlib.reload(sys.modules[module])
     assert all(runner.tools_for(agent) for agent in runner.WORKERS)
 
+
+def test_shared_amadeus_tools_are_available_when_configured(monkeypatch):
+    monkeypatch.setenv('AMADEUS_CLIENT_ID', 'test-client')
+    monkeypatch.setenv('AMADEUS_CLIENT_SECRET', 'test-secret')
+    assert 'search_flight' in {tool.name for tool in runner.tools_for('flights')}
+    assert 'search_hotels' in {tool.name for tool in runner.tools_for('hotels')}
+    assert 'city_search_amadeus' in {tool.name for tool in runner.tools_for('destinations')}
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(('tool_name', 'query', 'payload'), [
     ('map_search_places', '武汉有哪些景点', {'source': '百度地图 MCP', 'retrieved_at': '2026-10-28', 'data': {'results': [{'name': '黄鹤楼', 'address': '武汉市武昌区'}]}}),

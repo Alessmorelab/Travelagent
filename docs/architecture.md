@@ -50,7 +50,7 @@ flowchart TD
 | `backend/app/models/chat.py` | 会话、安装凭证、消息轮次表 |
 | `backend/app/core/database.py` | PostgreSQL / SQLite 驱动选择与连接 |
 
-`frontend/` 与 `src/agents/` 是原有网页及旧助手代码，目前保留其接口兼容性。小程序聊天不依赖旧助手的内存会话。Expo、原生启动器和独立移动端 HTML 预览已移除。
+原网页、旧助手及其接口已移除。小程序使用独立的聊天服务；航班与酒店等共用查询工具仍由当前助手使用。
 
 ## 数据与恢复语义
 

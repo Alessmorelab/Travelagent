@@ -19,7 +19,7 @@ test('微信请求保留方法、JSON 内容与接口状态，HTTP 失败不会�
     calls.push(request); queueMicrotask(() => request.success({ statusCode: 503, data: { detail: '服务暂不可用' } }));
     return { abort() {} };
   } });
-  const result = await fetch('https://travel.example/api/v1/team/search', { method: 'POST', body: '{"query":"京都"}', headers: { 'Content-Type': 'application/json' } });
+  const result = await fetch('https://travel.example/api/v1/chat/devices', { method: 'POST', body: '{"query":"京都"}', headers: { 'Content-Type': 'application/json' } });
   assert.equal(result.status, 503); assert.equal(result.ok, false);
   assert.equal(calls[0].method, 'POST'); assert.equal(calls[0].data, '{"query":"京都"}');
   assert.equal(calls[0].header['Content-Type'], 'application/json');
@@ -73,36 +73,22 @@ test('微信本地存储与共用业务逻辑可以恢复收藏和行程草稿',
   assert.equal(restored.getState().messages.length, 2);
 });
 
-test('在没有 fetch、URL、AbortController 的小程序环境中可运行示例与真实请求', async (t) => {
+test('在没有 fetch、URL、AbortController 的小程序环境中可运行示例与流式对话', async (t) => {
   const source = (await readFile(new URL('../src/domain/travel.mjs', import.meta.url), 'utf8')).replace(/^export /gm, '');
-  const sandbox = { setTimeout, clearTimeout };
-  vm.createContext(sandbox);
+  const sandbox = { setTimeout, clearTimeout }; vm.createContext(sandbox);
   const create = vm.runInContext(`${source}\ncreateTravelStore`, sandbox);
-  const calls = [];
-  const platform = { ...storageFixture(), request(request) {
-    calls.push(request);
-    queueMicrotask(() => request.success({ statusCode: 200, data: { response: '测试服务回复', thread_id: 'wechat-thread' } }));
-    return { abort() {} };
-  } };
-  const store = create(createMiniStorage(platform), options(platform));
-  t.after(() => store.dispose()); await store.hydrate();
-  await store.sendMessage('想去京都');
-  assert.equal(calls.length, 0);
-  store.setConnection({ mode: 'live', apiUrl: 'https://travel.example' });
+  const calls = []; const platform = { ...storageFixture(), request() { throw new Error('不应调用旧接口'); } };
+  const store = create(createMiniStorage(platform), { ...options(platform), stream: async (input) => { calls.push(input); return { response: '测试服务回复', thread_id: 'wechat-thread' }; } });
+  t.after(() => store.dispose()); await store.hydrate(); await store.sendMessage('想去京都');
+  assert.equal(calls.length, 0); store.setConnection({ mode: 'live', apiUrl: 'https://travel.example' });
   store.setAgent('flights'); await store.sendMessage('查询机票'); await store.sendMessage('再看看直飞');
-  assert.equal(calls[0].url, 'https://travel.example/api/v1/flights/search');
-  assert.equal(JSON.parse(calls[1].data).thread_id, 'wechat-thread');
-  assert.equal(JSON.parse(calls[0].data).query, '查询机票');
-  assert.equal(store.getState().messages.at(-1).content, '测试服务回复');
+  assert.equal(calls[0].query, '查询机票'); assert.equal(calls[1].threadId, 'wechat-thread'); assert.equal(store.getState().messages.at(-1).content, '测试服务回复');
 });
 
-test('小程序真实请求超时可恢复发送状态，不产生成功回复', async (t) => {
-  let aborts = 0;
-  const platform = { request() { return { abort() { aborts++; } }; } };
-  const store = createTravelStore(createMiniStorage(storageFixture()), { ...options(platform), timeout: 8 });
-  t.after(() => store.dispose()); await store.hydrate();
-  store.setConnection({ mode: 'live', apiUrl: 'https://travel.example' });
-  await store.sendMessage('查询酒店');
-  assert.match(store.getState().error, /超时/); assert.equal(store.getState().busy, false);
-  assert.equal(aborts, 1); assert.equal(store.getState().messages.length, 1);
+test('小程序流式请求超时可恢复发送状态，不产生成功回复', async (t) => {
+  let aborts = 0; const platform = { request() { throw new Error('不应调用旧接口'); } };
+  const stream = (input) => new Promise((_resolve, reject) => input.signal.addEventListener('abort', () => { aborts++; const error = new Error('aborted'); error.name = 'AbortError'; reject(error); }));
+  const store = createTravelStore(createMiniStorage(storageFixture()), { ...options(platform), stream, timeout: 8 });
+  t.after(() => store.dispose()); await store.hydrate(); store.setConnection({ mode: 'live', apiUrl: 'https://travel.example' }); await store.sendMessage('查询酒店');
+  assert.match(store.getState().error, /超时/); assert.equal(store.getState().busy, false); assert.equal(aborts, 1); assert.equal(store.getState().messages.length, 1);
 });

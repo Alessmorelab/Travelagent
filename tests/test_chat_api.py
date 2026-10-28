@@ -25,6 +25,19 @@ def start(token, request_id='request-1', conversation_id=None, query='规划京�
                 agent='team', query=query, preferences='武汉出发，2人同行')
 
 
+def test_application_exposes_chat_without_legacy_assistant_routes(tmp_path, monkeypatch):
+    from backend.app.main import app
+    from backend.app.services.chat import get_chat_service
+    monkeypatch.delenv('DATABASE_URL', raising=False)
+    monkeypatch.setenv('TRAVEL_CHAT_DB', str(tmp_path / 'application.sqlite3'))
+    get_chat_service.cache_clear()
+    with TestClient(app) as client:
+        assert client.get('/').status_code == 200
+        assert client.post('/api/v1/chat/devices').status_code == 200
+        for agent in ('team', 'flights', 'hotels', 'destinations'):
+            assert client.post(f'/api/v1/{agent}/search', json={'query': '武汉'}).status_code == 404
+
+
 def collect(client, payload):
     with client.websocket_connect('/api/v1/chat/ws') as socket:
         socket.send_json(payload)

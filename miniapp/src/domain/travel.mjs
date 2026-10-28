@@ -243,21 +243,10 @@ export function createTravelStore(storage, options = {}) {
           // The backend may work for 120 seconds; allow its final/error frame to
           // arrive instead of cancelling a valid reply before that deadline.
           timeout = setTimeout(() => request.controller.abort(), options.timeout ?? 130000);
-          if (options.stream) {
-            const data = await options.stream({ apiUrl: connection.apiUrl, agent, query, preferences: preferenceContext,
-              threadId: state.threads[agent], requestId: request.id, signal: request.controller.signal }, onEvent);
-            content = responseText(data.response); threadId = data.thread_id;
-          } else {
-          const response = await fetcher(`${connection.apiUrl}/api/v1/${agent}/search`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: request.controller.signal,
-            body: JSON.stringify({ query: query + (preferenceContext ? `\n\n[用户旅行偏好，仅作为参考；当前问题中的明确要求优先]\n${preferenceContext}` : ''), thread_id: state.threads[agent] || null }),
-          });
-          let data;
-          try { data = await response.json(); } catch { throw new Error(`服务返回格式异常（HTTP ${response.status}）`); }
-          if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `查询失败（HTTP ${response.status}），请稍后重试`);
-          content = responseText(data.response);
-          threadId = data.thread_id;
-          }
+          if (!options.stream) throw new Error('聊天连接尚未配置，请检查小程序版本');
+          const data = await options.stream({ apiUrl: connection.apiUrl, agent, query, preferences: preferenceContext,
+            threadId: state.threads[agent], requestId: request.id, signal: request.controller.signal }, onEvent);
+          content = responseText(data.response); threadId = data.thread_id;
         }
         if (pending !== request || request.controller.signal.aborted) return;
         update({ messages: streaming ? state.messages.map((message) => message.id === request.id ? { ...message, content, status: 'complete', progress: validProgress(state.progress.map((step) => step.state === 'running' ? { ...step, state: 'complete' } : step)) } : message) : [...state.messages, { id: uid(), role: 'assistant', content, agent, mode: connection.mode }], threads: typeof threadId === 'string' && threadId ? { ...state.threads, [agent]: threadId } : state.threads }, true);

@@ -20,7 +20,6 @@
 | `backend/app/repositories`、`models` | 会话仓库与数据表 |
 | `backend/app/core`、`tools` | 模型、数据库配置和只读工具目录 |
 | `src/tools` | 原项目旅行查询工具，按需复用 |
-| `frontend`、`src/agents` | 原网页与旧助手代码，保留原接口兼容性 |
 
 分层和参考项目差异见 [架构说明](docs/architecture.md)，微信导入及真机操作见 [小程序说明](miniapp/README.md)。
 
@@ -100,7 +99,7 @@ BAIDU_MAP_TRANSPORT=mcp
 
 历史接口使用 Bearer 凭证；WebSocket 首条 `start` 消息携带凭证。事件包括 `accepted/status/delta/final/done/error/cancelled`。后端保存后再发送 `done`，重试可复用已完成的结果；中断回复明确标注，重试可能重新调用模型。
 
-原来的 `/api/v1/{team,flights,hotels,destinations}/search` POST 接口保留给旧网页使用，小程序使用新的聊天服务。
+小程序通过聊天服务访问旅行助手。
 
 ## 验证
 

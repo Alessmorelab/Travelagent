@@ -33,42 +33,24 @@ test('收藏、偏好、行程完成进度与对话在重新打开后恢复', as
 
 test('真实请求按助手分别保存会话，并携带旅行偏好', async (t) => {
   const calls = [];
-  const { store } = await fixture({ fetch: async (url, request) => {
-    const body = JSON.parse(request.body); calls.push({ url, body });
-    const agent = url.split('/').at(-2);
-    return { ok: true, json: async () => ({ response: `${agent}真实结果`, thread_id: `thread-${agent}` }) };
-  } }); t.after(() => store.dispose());
-  store.setConnection({ mode: 'live', apiUrl: 'https://travel.example/' });
-  store.savePreferences(store.getState().preferences);
+  const { store } = await fixture({ stream: async (input) => { calls.push(input); return { response: `${input.agent}真实结果`, thread_id: `thread-${input.agent}` }; } });
+  t.after(() => store.dispose()); store.setConnection({ mode: 'live', apiUrl: 'https://travel.example/' }); store.savePreferences(store.getState().preferences);
   for (const agent of ['team', 'flights', 'hotels', 'destinations', 'flights']) { store.setAgent(agent); await store.sendMessage('查询旅行信息'); }
-  assert.deepEqual(calls.map((call) => call.url), ['team', 'flights', 'hotels', 'destinations', 'flights'].map((agent) => `https://travel.example/api/v1/${agent}/search`));
-  assert.deepEqual(calls.map((call) => call.body.thread_id), [null, null, null, null, 'thread-flights']);
-  assert.match(calls[0].body.query, /武汉出发/);
-  assert.match(calls[0].body.query, /总预算人民币8000元/);
+  assert.deepEqual(calls.map((call) => call.agent), ['team', 'flights', 'hotels', 'destinations', 'flights']);
+  assert.deepEqual(calls.map((call) => call.threadId), [undefined, undefined, undefined, undefined, 'thread-flights']);
+  assert.match(calls[0].preferences, /武汉出发/); assert.match(calls[0].preferences, /总预算人民币8000元/);
   assert.equal(store.getState().messages.at(-1).mode, 'live');
 });
 
-for (const transport of ['http', 'websocket']) {
-  test(`${transport} 真实请求排除默认示例偏好，主动保存后才附带且重新打开后保持`, async (t) => {
-    const calls = [];
-    const options = transport === 'http' ? { fetch: async (_url, init) => {
-      calls.push(JSON.parse(init.body));
-      return { ok: true, json: async () => ({ response: '武汉建议' }) };
-    } } : { stream: async (input) => { calls.push(input); return { response: '武汉建议' }; } };
-    const { store, storage } = await fixture(options); t.after(() => store.dispose());
-    store.setConnection({ mode: 'live', apiUrl: 'https://travel.example' });
-    await store.sendMessage('想去武汉玩几天');
-    assert.equal(calls[0].query, '想去武汉玩几天');
-    assert.equal(calls[0].preferences || '', '');
-    assert.doesNotMatch(JSON.stringify(calls[0]), /京都|8000/);
-    store.savePreferences({ ...store.getState().preferences, destination: '武汉', budget: 3000 });
-    await store.flush();
-    const restored = createTravelStore(storage, options); t.after(() => restored.dispose()); await restored.hydrate();
-    await restored.sendMessage('查景点');
-    assert.match(calls[1].preferences || calls[1].query, /前往武汉/);
-    assert.match(calls[1].preferences || calls[1].query, /3000元/);
-  });
-}
+test('真实请求排除默认示例偏好，主动保存后才附带且重新打开后保持', async (t) => {
+  const calls = []; const options = { stream: async (input) => { calls.push(input); return { response: '武汉建议' }; } };
+  const { store, storage } = await fixture(options); t.after(() => store.dispose());
+  store.setConnection({ mode: 'live', apiUrl: 'https://travel.example' }); await store.sendMessage('想去武汉玩几天');
+  assert.equal(calls[0].query, '想去武汉玩几天'); assert.equal(calls[0].preferences, ''); assert.doesNotMatch(JSON.stringify(calls[0]), /京都|8000/);
+  store.savePreferences({ ...store.getState().preferences, destination: '武汉', budget: 3000 }); await store.flush();
+  const restored = createTravelStore(storage, options); t.after(() => restored.dispose()); await restored.hydrate(); await restored.sendMessage('查景点');
+  assert.match(calls[1].preferences, /前往武汉/); assert.match(calls[1].preferences, /3000元/);
+});
 
 test('旧版本自动保存的京都示例偏好不会迁移为用户确认的偏好', async (t) => {
   const storage = memoryStorage();
@@ -86,7 +68,7 @@ test('旧版本自动保存的京都示例偏好不会迁移为用户确认的�
 
 test('后端失败不伪造成功回复，重试不重复添加用户消息', async (t) => {
   let fail = true;
-  const { store } = await fixture({ fetch: async () => fail ? { ok: false, status: 503, json: async () => ({ detail: '旅行服务暂不可用' }) } : { ok: true, json: async () => ({ response: '恢复后的真实回复', thread_id: 'recovered' }) } });
+  const { store } = await fixture({ stream: async () => { if (fail) throw new Error('旅行服务暂不可用'); return { response: '恢复后的真实回复', thread_id: 'recovered' }; } });
   t.after(() => store.dispose()); store.setConnection({ mode: 'live', apiUrl: 'http://localhost:8000' });
   await store.sendMessage('查询机票');
   assert.equal(store.getState().messages.length, 1);
@@ -97,12 +79,12 @@ test('后端失败不伪造成功回复，重试不重复添加用户消息', as
 
 test('切换服务会取消旧请求，迟到的结果不会污染新会话', async (t) => {
   let resolve;
-  const { store } = await fixture({ fetch: () => new Promise((done) => { resolve = done; }) });
+  const { store } = await fixture({ stream: () => new Promise((done) => { resolve = done; }) });
   t.after(() => store.dispose()); store.setConnection({ mode: 'live', apiUrl: 'https://first.example' });
   const request = store.sendMessage('旧请求');
   store.setConnection({ mode: 'live', apiUrl: 'https://second.example' });
-  resolve({ ok: true, json: async () => ({ response: '不应出现', thread_id: 'old-thread' }) }); await request;
-  assert.equal(store.getState().messages.length, 1); assert.deepEqual(store.getState().threads, {});
+  resolve({ response: '不应出现', thread_id: 'old-thread' }); await request;
+  assert.equal(store.getState().messages.length, 0); assert.deepEqual(store.getState().threads, {});
   assert.equal(store.getState().busy, false);
 });
 
@@ -139,7 +121,7 @@ test('部分损坏的行程与消息会被过滤，完整记录仍能恢复', as
 });
 
 test('等待超时后可再次发送，且不生成虚假的查询结果', async (t) => {
-  const { store } = await fixture({ timeout: 10, fetch: (_url, request) => new Promise((_resolve, reject) => request.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))) });
+  const { store } = await fixture({ timeout: 10, stream: (request) => new Promise((_resolve, reject) => request.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))) });
   t.after(() => store.dispose()); store.setConnection({ mode: 'live', apiUrl: 'https://travel.example' });
   await store.sendMessage('查询酒店');
   assert.match(store.getState().error, /超时/); assert.equal(store.getState().busy, false);
