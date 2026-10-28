@@ -74,8 +74,8 @@ test('微信本地存储与共用业务逻辑可以恢复收藏和行程草稿',
 });
 
 test('在没有 fetch、URL、AbortController 的小程序环境中可运行示例与流式对话', async (t) => {
-  const source = (await readFile(new URL('../src/domain/travel.mjs', import.meta.url), 'utf8')).replace(/^export /gm, '');
-  const sandbox = { setTimeout, clearTimeout }; vm.createContext(sandbox);
+  const source = (await readFile(new URL('../src/domain/travel.mjs', import.meta.url), 'utf8')).replace(/^import .*\n/gm, '').replace(/^export /gm, '');
+  const sandbox = { setTimeout, clearTimeout, parseItinerary: () => null }; vm.createContext(sandbox);
   const create = vm.runInContext(`${source}\ncreateTravelStore`, sandbox);
   const calls = []; const platform = { ...storageFixture(), request() { throw new Error('不应调用旧接口'); } };
   const store = create(createMiniStorage(platform), { ...options(platform), stream: async (input) => { calls.push(input); return { response: '测试服务回复', thread_id: 'wechat-thread' }; } });

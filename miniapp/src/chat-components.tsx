@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import Taro from '@tarojs/taro';
-import { Button, RichText, Text, Textarea, View } from '@tarojs/components';
+import { Button, Input, RichText, Text, Textarea, View } from '@tarojs/components';
 import type { ChatSnapshot, Message, Progress, State } from './domain/travel.mjs';
 import { AGENTS } from './domain/travel.mjs';
 import type { RemoteConversation } from './services/chat-client.mjs';
 import { AgentChoices, Sheet } from './components';
 import { chatClient, goTab, sendQuery, store } from './stores/travel';
 import { formatAssistantMessage } from './domain/message-format.mjs';
+import { parseItinerary } from './domain/itinerary.mjs';
 
 export function ChatComposer({ busy, blocked, value, onChange, onSend, onStop, onMore, onKeyboardHeight }: {
   busy: boolean; blocked: boolean; value: string; onChange: (value: string) => void;
@@ -31,7 +32,15 @@ export function ChatComposer({ busy, blocked, value, onChange, onSend, onStop, o
 
 export function ChatMessage({ message, state, latest }: { message: Message; state: State; latest: boolean }) {
   const formatted = useMemo(() => message.role === 'assistant' ? formatAssistantMessage(message.content) : '', [message.role, message.content]);
+  const itinerary = useMemo(() => message.role === 'assistant' && message.status !== 'streaming' && message.status !== 'interrupted' ? parseItinerary(message.content) : null, [message.role, message.content, message.status]);
+  const [saving, setSaving] = useState(false);
+  const [destination, setDestination] = useState('');
+  const [saveError, setSaveError] = useState('');
   const copy = () => { void Taro.setClipboardData({ data: message.content }).catch(() => store.toast('复制失败，请长按选择文字')); };
+  const save = () => {
+    try { store.saveAssistantTrip(message, destination); setSaving(false); goTab('trips'); }
+    catch (error) { setSaveError((error as Error).message); }
+  };
   if (message.role === 'user') return <View className='dialogue-message user'><Text className='user-message-text' selectable>{message.content}</Text></View>;
   const interrupted = message.status === 'interrupted';
   return <View className='dialogue-message assistant'>
@@ -46,8 +55,17 @@ export function ChatMessage({ message, state, latest }: { message: Message; stat
     {interrupted && !!message.content && <Text className='reply-stopped'>回复未完成</Text>}
     {message.status !== 'streaming' && <View className='message-actions'>
       {!!message.content && <Button className='message-action' onClick={copy} ariaLabel='复制回复'>复制</Button>}
+      {itinerary && <Button className='message-action' onClick={() => { setSaveError(''); setSaving(true); }}>保存为行程</Button>}
       {latest && interrupted && !!state.lastQuery && <Button className='message-action' disabled={state.busy} onClick={() => sendQuery(state.lastQuery || '', true)}>重新回答</Button>}
     </View>}
+    {saving && itinerary && <Sheet title='保存行程草稿' onClose={() => setSaving(false)}>
+      <Text className='sheet-description'>{message.mode === 'demo' ? '这是示例回复，保存后仍标记为示例。' : '请核对下方安排；原始回复会保存在草稿中。'} 日期、人数和预算暂不填入。</Text>
+      <View className='form-field'><Text className='field-label'>目的地</Text><Input className='form-input' value={destination} maxlength={60} placeholder='请填写目的地' onInput={(event) => setDestination(event.detail.value)} /></View>
+      {itinerary.days.map((day, index) => <View className='import-day' key={index}><Text>第 {index + 1} 天</Text>{day.map((activity, i) => <Text key={i}>{activity.time} · {activity.title}{activity.detail ? `\n${activity.detail}` : ''}</Text>)}</View>)}
+      {itinerary.notes && <View className='import-day'><Text>其他信息</Text><Text>{itinerary.notes}</Text></View>}
+      {saveError && <Text className='form-error'>{saveError}</Text>}
+      <Button className='primary-button' onClick={save}>保存并查看行程</Button>
+    </Sheet>}
   </View>;
 }
 

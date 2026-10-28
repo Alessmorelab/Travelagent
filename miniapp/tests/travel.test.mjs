@@ -159,3 +159,27 @@ test('查询期间出错时保留步骤并标记中断', async (t) => {
   assert.equal(reply.status, 'interrupted'); assert.equal(reply.progress[0].state, 'interrupted');
   assert.equal(store.getState().error, '网络中断');
 });
+
+test('按天回复导入草稿，可编辑并恢复，保留原始回复', async (t) => {
+  const { store, storage } = await fixture(); t.after(() => store.dispose());
+  const content = '## 武汉行程\n### Day 1 · 城市漫游\n**上午｜黄鹤楼** 参观\n**下午｜东湖** 散步\n### Day 2 · 博物馆\n**上午｜省博物馆** 注意预约\n### 📌 实用提醒\n门票待确认';
+  const id = store.saveAssistantTrip({ role: 'assistant', mode: 'live', status: 'complete', content }, '武汉');
+  let trip = store.getState().trips.find((item) => item.id === id);
+  assert.equal(trip.days.length, 2); assert.equal(trip.days[0][0].title, '黄鹤楼'); assert.equal(trip.days[0][0].detail, '参观');
+  assert.equal(trip.budget, 0); assert.equal(trip.startDate, ''); assert.equal(trip.sourceText, content);
+  store.editActivity(id, 0, 0, { title: '黄鹤楼公园', time: '09:00', detail: '提前预约' });
+  store.editActivity(id, 1, -1, { title: '东湖', time: '下午', detail: '散步' }); await store.flush();
+  const restored = createTravelStore(storage); t.after(() => restored.dispose()); await restored.hydrate();
+  trip = restored.getState().trips.find((item) => item.id === id);
+  assert.equal(trip.days[0][0].title, '黄鹤楼公园'); assert.equal(trip.days[1][1].title, '东湖'); assert.equal(trip.sourceText, content);
+});
+
+test('非行程、未完成回复不会保存，示例回复保留示例标识', async (t) => {
+  const { store } = await fixture(); t.after(() => store.dispose());
+  const content = '### Day 1 · 游览\n**上午｜景点** 待核对';
+  assert.throws(() => store.saveAssistantTrip({ role: 'assistant', status: 'interrupted', content }, '武汉'), /完整回复/);
+  assert.throws(() => store.saveAssistantTrip({ role: 'assistant', content: '你好' }, '武汉'), /未识别/);
+  assert.throws(() => store.saveAssistantTrip({ role: 'assistant', content }, ''), /目的地/);
+  const id = store.saveAssistantTrip({ role: 'assistant', mode: 'demo', content }, '武汉');
+  assert.equal(store.getState().trips.find((trip) => trip.id === id).sample, true);
+});

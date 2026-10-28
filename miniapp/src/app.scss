@@ -289,3 +289,10 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .chat-tool-menu > button > text:last-child { margin-left: auto; color: $muted; font-size: 32px; }
 .chat-tool-menu > button > view > text { display: block; font-size: 27px; line-height: 1.7; }
 .chat-tool-menu > button > view > text:last-child { font-size: 22px; color: $muted; margin-top: 5px; }
+
+.import-day { padding: 18px 0; border-bottom: 1px solid $line; }
+.import-day > text { display: block; font-size: 23px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; }
+.import-day > text:first-child { font-weight: 600; margin-bottom: 8px; }
+.activity-edit-hint { display: block; color: #829574; font-size: 20px; margin-top: 8px; }
+.trip-note-input { height: 180px; padding: 16px 19px; box-sizing: border-box; }
+.trip-source-text { display: block; white-space: pre-wrap; word-break: break-word; font-size: 24px; line-height: 1.8; }

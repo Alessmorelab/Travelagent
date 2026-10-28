@@ -1,3 +1,5 @@
+import { parseItinerary } from './itinerary.mjs';
+
 export const STORAGE_KEY = 'roam.travel.v1';
 export const AGENTS = [
   { id: 'team', label: '整趟行程', icon: 'sparkles-outline' },
@@ -63,8 +65,8 @@ export function validateConnection(value) {
   return { mode: value.mode, apiUrl: url.toString().replace(/\/$/, '') };
 }
 
-export function formatDate(date) { return date.slice(5).replace('-', '.'); }
-export function dayCount(trip) { return Math.round((Date.parse(trip.endDate) - Date.parse(trip.startDate)) / 86400000) + 1; }
+export function formatDate(date) { return date ? date.slice(5).replace('-', '.') : '日期待定'; }
+export function dayCount(trip) { return trip.startDate && trip.endDate ? Math.round((Date.parse(trip.endDate) - Date.parse(trip.startDate)) / 86400000) + 1 : (trip.days?.length || 0); }
 export function preferenceSummary(p) { return `${p.origin}出发，前往${p.destination}；${p.startDate}至${p.endDate}；${p.travelers}人；总预算人民币${p.budget}元；偏好：${p.style}。`; }
 
 function demoResponse(text, agent, p) {
@@ -141,9 +143,12 @@ export function createTravelStore(storage, options = {}) {
               if (!trip || typeof trip !== 'object') return false;
               if (!['destination', 'startDate', 'endDate'].every((key) => typeof trip[key] === 'string')
                 || typeof trip.travelers !== 'number' || typeof trip.budget !== 'number') return false;
-              validatePreferences({ ...preferences, ...trip });
+              if (trip.source === 'assistant') {
+                if (!trip.destination.trim() || trip.startDate || trip.endDate || trip.travelers !== 0 || trip.budget !== 0
+                  || typeof trip.sourceText !== 'string' || trip.sourceText.length > 30000 || typeof trip.notes !== 'string') return false;
+              } else validatePreferences({ ...preferences, ...trip });
               return typeof trip.id === 'string' && typeof trip.title === 'string' && typeof trip.sample === 'boolean'
-                && Array.isArray(trip.days) && trip.days.length === dayCount(trip)
+                && Array.isArray(trip.days) && trip.days.length > 0 && trip.days.length <= 30 && trip.days.length === dayCount(trip)
                 && trip.days.every((day) => Array.isArray(day) && day.every((item) => item
                   && ['title', 'time', 'detail', 'icon'].every((key) => typeof item[key] === 'string')))
                 && Array.isArray(trip.completed) && trip.completed.every((key) => typeof key === 'string');
@@ -294,6 +299,41 @@ export function createTravelStore(storage, options = {}) {
       const days = Array.from({ length: count }, (_, index) => [{ time: index === 0 ? '10:00' : '09:00', title: index === 0 ? `抵达${p.destination}，安顿行李` : index === count - 1 ? '轻松收尾，准备返程' : `探索${p.destination} · 自由安排`, detail: '行程草稿，交通与活动待确认', icon: index === 0 || index === count - 1 ? 'airplane-outline' : 'compass-outline' }]);
       const trip = { id: uid(), destinationId: match?.id || null, title: `${p.destination} · ${count}天${Math.max(0, count - 1)}晚`, destination: p.destination, startDate: p.startDate, endDate: p.endDate, travelers: p.travelers, budget: p.budget, sample: false, days, completed: [] };
       update({ trips: [trip, ...state.trips], preferences: p, preferencesConfirmed: true, tab: 'trips', activeDay: 0 }, true); toast('行程草稿已创建');
+    },
+    saveAssistantTrip(message, destination) {
+      if (!message || message.role !== 'assistant' || message.status === 'streaming' || message.status === 'interrupted') throw new Error('请等待完整回复后再保存');
+      const name = String(destination || '').trim();
+      if (!name || name.length > 60) throw new Error('请填写目的地（最多60字）');
+      const parsed = parseItinerary(message.content);
+      if (!parsed) throw new Error('未识别到完整的按天行程，请让助手按天重新规划');
+      const match = DESTINATIONS.find((item) => item.name === name);
+      const trip = { id: uid(), destinationId: match?.id || null, destination: name,
+        title: `${name} · ${parsed.days.length}天`, startDate: '', endDate: '', travelers: 0, budget: 0,
+        sample: message.mode === 'demo', source: 'assistant', ...parsed, completed: [] };
+      update({ trips: [trip, ...state.trips], activeDay: 0, focusTripId: trip.id }, true);
+      toast('已保存为行程草稿，请核对并完善');
+      return trip.id;
+    },
+    clearTripFocus() { update({ focusTripId: '' }); },
+    editActivity(tripId, day, index, value) {
+      const trip = state.trips.find((item) => item.id === tripId);
+      if (!trip || !Number.isInteger(day) || day < 0 || day >= trip.days.length || !Number.isInteger(index) || index < -1 || index >= trip.days[day].length) throw new Error('行程安排不存在');
+      const title = String(value.title || '').trim(), time = String(value.time || '').trim(), detail = String(value.detail || '').trim();
+      if (!title || title.length > 100 || time.length > 40 || detail.length > 5000) throw new Error('请填写地点或安排，并检查内容长度');
+      if (index === -1 && trip.days[day].length >= 50) throw new Error('当天最多保存50项安排');
+      const days = trip.days.map((items) => items.slice());
+      const activity = { title, time: time || '时间待定', detail, icon: index < 0 ? 'compass-outline' : days[day][index].icon };
+      if (index < 0) days[day].push(activity); else days[day][index] = activity;
+      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days } : item) }, true);
+      toast('行程安排已保存');
+    },
+    removeActivity(tripId, day, index) {
+      const trip = state.trips.find((item) => item.id === tripId);
+      if (!trip || !Number.isInteger(day) || !Number.isInteger(index) || !trip.days[day] || !trip.days[day][index]) return;
+      const days = trip.days.map((items) => items.slice()); days[day].splice(index, 1);
+      const completed = trip.completed.filter((key) => !key.startsWith(`${day}-`));
+      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed } : item) }, true);
+      toast('已删除该安排');
     },
     toggleActivity(tripId, key) {
       update({ trips: state.trips.map((trip) => trip.id === tripId ? { ...trip, completed: trip.completed.includes(key) ? trip.completed.filter((item) => item !== key) : [...trip.completed, key] } : trip) }, true);
