@@ -123,7 +123,7 @@ async def test_real_graph_calls_baidu_tool_and_reports_only_public_events(monkey
     monkeypatch.setattr(BaiduMaps, 'weather', lambda self, city, district='': {'now': {'text': '晴'}, 'source': '百度地图'})
     class Worker(FakeMessagesListChatModel):
         def bind_tools(self, tools, **kwargs):
-            assert get_baidu_weather in tools
+            assert get_baidu_weather.name in {item.name for item in tools}
             return self
     models = iter([Worker(responses=[AIMessage(content='', tool_calls=[{'name': 'get_baidu_weather',
                    'args': {'city': '武汉市', 'district': '武昌区'}, 'id': 'weather-call', 'type': 'tool_call'}]),

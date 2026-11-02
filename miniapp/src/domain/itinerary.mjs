@@ -1,4 +1,5 @@
 // Extract only explicit day sections. Keep the original answer for review.
+import { expandActivities } from './activity-slots.mjs';
 const cn = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
 function dayNumber(value) {
   if (/^\d+$/.test(value)) return Number(value);
@@ -27,6 +28,7 @@ export function parseItinerary(text) {
   const result = [];
   for (const day of days) {
     const activities = []; let activity = null;
+    const hasSlots = day.lines.some((line) => /^\s*(?:[-*+]\s+)?(?:\*\*)?(上午|下午|中午|晚上|傍晚|早上|早晨|\d{1,2}:\d{2})\s*[｜|：:]/.test(line));
     for (const line of day.lines) {
       // Time slots are the headings produced by the current assistant prompt.
       const match = /^\s*(?:[-*+]\s+)?\*\*(上午|下午|中午|晚上|傍晚|早上|早晨|\d{1,2}:\d{2})\s*[｜|：:]\s*([^*\n]+)\*\*\s*(.*)$/.exec(line) || /^\s*(?:[-*+]\s+)?(上午|下午|中午|晚上|傍晚|早上|早晨|\d{1,2}:\d{2})\s*[｜|：:]\s*([^\n]+)$/.exec(line);
@@ -35,13 +37,15 @@ export function parseItinerary(text) {
         if (!activity.title) return null;
         activities.push(activity);
       } else if (line.trim()) {
+        if (!activity && hasSlots) { notes.push(line); continue; }
         if (!activity) { activity = { time: '时间待定', title: day.theme || '当天安排', detail: '', icon: 'compass-outline' }; activities.push(activity); }
         activity.detail = [activity.detail, line.trim()].filter(Boolean).join('\n');
       }
     }
     if (!activities.length && day.theme) activities.push({ time: '时间待定', title: day.theme, detail: '', icon: 'compass-outline' });
-    if (!activities.length || activities.length > 50) return null;
-    result.push(activities);
+    const expanded = expandActivities(activities);
+    if (!expanded.length || expanded.length > 50) return null;
+    result.push(expanded);
   }
   return { days: result, notes: notes.join('\n').trim(), sourceText: text };
 }

@@ -95,4 +95,12 @@ python3.12 -m venv .venv
 
 参考：[Taro 编译与微信开发者工具导入](https://docs.taro.zone/docs/GETTING-STARTED/)。
 
-系统以 [Jevon-Zhong/agent-trip-planner](https://github.com/Jevon-Zhong/agent-trip-planner) 为架构参考，采用小程序、FastAPI、WebSocket、LangGraph 和 PostgreSQL 的前后端分离方案。现有小程序继续使用 Taro + React，未迁移到其 Vue/Uni-app 技术栈。分层职责、差异和后续扩展见 [架构说明](../docs/architecture.md)。百度地点、国内天气和路线支持后端 MCP 与直接 Web API 两种接入，需填写服务端 AK、开通查询权限并通过实际业务验证；小程序行程页支持手动搜索地点并标记地图；该功能使用百度地点检索及坐标转换 Web API，需开通相应服务，路线绘制尚未接入。微信账号登录、高铁余票和语音尚未接入。
+系统以 [Jevon-Zhong/agent-trip-planner](https://github.com/Jevon-Zhong/agent-trip-planner) 为架构参考，采用小程序、FastAPI、WebSocket、LangGraph 和 PostgreSQL 的前后端分离方案。现有小程序继续使用 Taro + React，未迁移到其 Vue/Uni-app 技术栈。分层职责、差异和后续扩展见 [架构说明](../docs/architecture.md)。百度地点、国内天气和路线支持后端 MCP 与直接 Web API 两种接入，需填写服务端 AK、开通查询权限并通过实际业务验证；小程序行程页支持手动搜索地点并标记地图；该功能使用百度地点检索及坐标转换 Web API，需开通相应服务，已支持按天地图、地点候选确认、步行/驾车/公交路线和失败路段重试，路线还需开通相应 Web API 权限。微信账号登录、高铁余票和语音尚未接入。
+
+## 行程地图与连接恢复
+
+真实服务生成按天行程后，可在回复下方点击「查看行程地图」，或保存草稿后在行程页打开。同名地点核对地址再选；休息等非地点安排可选择「不显示在地图」。至少确认两个地点后查询当天路线，支持切换步行、驾车、公交。编辑安排中的上移/下移会调整顺序；更换名称会清除原地点绑定，避免复用旧坐标。
+
+聊天短暂断线会自动尝试恢复同一次请求，按事件编号去重；「恢复或重试」复用请求编号，「重新生成」使用新编号。主动停止会取消后台任务。行程结构及公开错误随历史对话保存，旧文本回复仍可通过显式 Day 标题导入。
+
+实现和验收边界见[行程地图与异常恢复](../docs/map-and-resilience.md)。

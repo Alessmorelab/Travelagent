@@ -15,6 +15,7 @@ class ChatService:
     def __init__(self, repository: ChatRepository, runner=None):
         self._repository = repository
         self.runner = runner
+        self._runs = None
 
     def close(self):
         self._repository.close()
@@ -34,6 +35,17 @@ class ChatService:
     def delete_conversation(self, identity: str, conversation_id: str):
         self._repository.delete(identity, conversation_id)
 
+    def runs(self):
+        if self._runs is None:
+            from backend.app.services.runs import ChatRuns
+            self._runs = ChatRuns(self)
+        return self._runs
+
+    async def shutdown(self):
+        if self._runs:
+            await self._runs.shutdown()
+        await asyncio.to_thread(self.close)
+
     async def stream(self, request: StartMessage):
         repo = self._repository
         identity = await asyncio.to_thread(repo.authenticate, request.token)
@@ -47,6 +59,9 @@ class ChatService:
             if replay:
                 for step in await asyncio.to_thread(repo.progress, turn['id']):
                     yield {'type': 'status', **step}
+                payload = await asyncio.to_thread(repo.payload, turn['id'])
+                if payload:
+                    yield {'type': 'artifact', **payload}
                 yield {'type': 'final', 'content': turn['response']}
                 yield {'type': 'done', 'conversation_id': turn['conversation_id']}
                 return
@@ -63,6 +78,12 @@ class ChatService:
                             content += event.get('content', '')
                         elif kind == 'final':
                             content = event.get('content', '')
+                        elif kind == 'artifact':
+                            await asyncio.to_thread(repo.save_payload, turn['id'], {key: event[key] for key in ('itinerary', 'warnings', 'sources') if key in event})
+                            yield event
+                            continue
+                        if len(content) > 80000:
+                            raise ChatError('本次回复过长，请缩小查询范围后重试', 422)
                         elif kind == 'status':
                             step = await asyncio.to_thread(repo.record_step, turn['id'], event)
                             if step:

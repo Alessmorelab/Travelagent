@@ -1,6 +1,6 @@
 """Conversation tables; compatible with the previous local SQLite schema."""
 
-from sqlalchemy import Column, Float, ForeignKey, Index, MetaData, String, Table, Text, UniqueConstraint
+from sqlalchemy import Column, Float, Integer, ForeignKey, Index, MetaData, String, Table, Text, UniqueConstraint
 
 metadata = MetaData()
 
@@ -43,4 +43,16 @@ turn_steps = Table(
     Column('kind', String(10), nullable=False),
     Column('state', String(20), nullable=False),
     Column('created', Float, nullable=False),
+)
+
+turn_payloads = Table(
+    'turn_payloads', metadata,
+    Column('turn_id', String(36), ForeignKey('turns.id', ondelete='CASCADE'), primary_key=True),
+    Column('payload', Text, nullable=False),
+)
+turn_events = Table(
+    'turn_events', metadata,
+    Column('turn_id', String(36), ForeignKey('turns.id', ondelete='CASCADE'), primary_key=True),
+    Column('seq', Integer, primary_key=True),
+    Column('payload', Text, nullable=False),
 )

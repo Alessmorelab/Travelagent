@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        await asyncio.to_thread(service.close)
+        await service.shutdown()
         get_chat_service.cache_clear()
 
 

@@ -7,7 +7,28 @@ import type { RemoteConversation } from './services/chat-client.mjs';
 import { AgentChoices, Sheet } from './components';
 import { chatClient, goTab, sendQuery, store } from './stores/travel';
 import { formatAssistantMessage } from './domain/message-format.mjs';
-import { parseItinerary } from './domain/itinerary.mjs';
+import { itineraryForMessage } from './domain/map-data.mjs';
+import { readSources } from './domain/query-sources.mjs';
+import type { QuerySource } from './domain/query-sources.mjs';
+
+const factLabels: Record<string, string> = { price: '费用', distance: '距离', duration: '耗时', rating: '评分', exit: '出口', transit: '线路', hours: '开放信息', weather: '天气' };
+
+export function QuerySources({ sources, available, onClose }: { sources: QuerySource[]; available: boolean; onClose(): void }) {
+  const [expanded, setExpanded] = useState<string[]>([]);
+  return <Sheet title='查询依据' onClose={onClose}>
+    <Text className='sheet-description'>编号对应回复中的 [E1] 等标记。这里展示本次查询实际返回的字段；查询成功不代表整段回答的每个描述都已核实。</Text>
+    {!sources.length && <Text className='note'>{available ? '本条回复没有可展示的查询依据。' : '这条历史回复未保存查询依据，不能事后认定其中的数字已经核实。可重新发起查询获取依据。'}</Text>}
+    {sources.map((source) => <View className='query-source' key={source.id}>
+      <Text className='query-source-title'>[{source.id}] {source.label}</Text>
+      <Text>来源：{source.source}</Text>
+      <Text>{source.retrieved_at ? '查询时间' : '结果接收时间'}：{source.retrieved_at || source.received_at || '未提供'}</Text>
+      {!!source.query && <Text>查询范围：{source.query}</Text>}
+      {source.facts.map((fact, index) => <Text key={index}>{fact.subject ? `${fact.subject} · ` : ''}{factLabels[fact.kind] || '返回字段'}：{fact.value}{fact.unit}{fact.date ? `（${fact.date}）` : ''}</Text>)}
+      {!!source.excerpt && <Button className='text-button' onClick={() => setExpanded((previous) => previous.includes(source.id) ? previous.filter((id) => id !== source.id) : [...previous, source.id])}>{expanded.includes(source.id) ? '收起返回片段' : '查看查询返回片段'}</Button>}
+      {expanded.includes(source.id) && <Text className='query-source-excerpt' selectable>{source.excerpt}</Text>}
+    </View>)}
+  </Sheet>;
+}
 
 export function ChatComposer({ busy, blocked, value, onChange, onSend, onStop, onMore, onKeyboardHeight }: {
   busy: boolean; blocked: boolean; value: string; onChange: (value: string) => void;
@@ -32,8 +53,10 @@ export function ChatComposer({ busy, blocked, value, onChange, onSend, onStop, o
 
 export function ChatMessage({ message, state, latest }: { message: Message; state: State; latest: boolean }) {
   const formatted = useMemo(() => message.role === 'assistant' ? formatAssistantMessage(message.content) : '', [message.role, message.content]);
-  const itinerary = useMemo(() => message.role === 'assistant' && message.status !== 'streaming' && message.status !== 'interrupted' ? parseItinerary(message.content) : null, [message.role, message.content, message.status]);
+  const itinerary = useMemo(() => itineraryForMessage(message), [message.role, message.content, message.status, message.itinerary]);
   const [saving, setSaving] = useState(false);
+  const [showSources, setShowSources] = useState(false);
+  const sources = useMemo(() => readSources(message.sources), [message.sources]);
   const [destination, setDestination] = useState('');
   const [saveError, setSaveError] = useState('');
   const copy = () => { void Taro.setClipboardData({ data: message.content }).catch(() => store.toast('复制失败，请长按选择文字')); };
@@ -47,17 +70,23 @@ export function ChatMessage({ message, state, latest }: { message: Message; stat
     <View className='assistant-identity'><View className='assistant-mark'>✦</View><Text>远行</Text>
       {message.mode === 'demo' && <Text className='message-mode'>示例</Text>}
     </View>
+    {latest && state.busy && state.connectionStatus === 'reconnecting' && <Text className='note'>连接中断，正在恢复同一次回复…</Text>}
     <TaskProgress steps={message.progress || (latest ? state.progress : [])} busy={latest && state.busy} requestId={message.id} />
     {message.content ? <RichText className='assistant-answer' nodes={formatted} userSelect />
       : state.busy && latest ? <View className='reply-pending' ariaLabel='正在准备回复'><View /><View /><View /><View /></View>
       : <Text className='reply-stopped'>回复已停止</Text>}
     {message.status === 'streaming' && !!message.content && <Text className='stream-cursor'>▍</Text>}
     {interrupted && !!message.content && <Text className='reply-stopped'>回复未完成</Text>}
+    {message.warnings?.some((warning) => warning.kind === 'unverified_detail') && <Text className='note'>部分具体信息已标注待确认，可查看查询依据。</Text>}
     {message.status !== 'streaming' && <View className='message-actions'>
       {!!message.content && <Button className='message-action' onClick={copy} ariaLabel='复制回复'>复制</Button>}
-      {itinerary && <Button className='message-action' onClick={() => { setSaveError(''); setSaving(true); }}>保存为行程</Button>}
-      {latest && interrupted && !!state.lastQuery && <Button className='message-action' disabled={state.busy} onClick={() => sendQuery(state.lastQuery || '', true)}>重新回答</Button>}
+      {message.mode === 'live' && !!message.content && <Button className='message-action' onClick={() => setShowSources(true)}>查询依据{sources.length ? ` · ${sources.length}` : ''}</Button>}
+      {itinerary && <Button className='message-action' onClick={() => { store.openMap('message', message.id); goTab('trips'); }}>查看行程地图</Button>}
+      {itinerary && <Button className='message-action' onClick={() => { setSaveError(''); setDestination(itinerary.destination); setSaving(true); }}>保存为行程</Button>}
+      {latest && interrupted && !!state.lastQuery && <Button className='message-action' disabled={state.busy} onClick={() => sendQuery(state.lastQuery || '', true)}>恢复或重试</Button>}
+      {latest && !state.busy && !!state.lastQuery && <Button className='message-action' onClick={() => sendQuery(state.lastQuery || '', 'regenerate')}>重新生成</Button>}
     </View>}
+    {showSources && <QuerySources sources={sources} available={Array.isArray(message.sources)} onClose={() => setShowSources(false)} />}
     {saving && itinerary && <Sheet title='保存行程草稿' onClose={() => setSaving(false)}>
       <Text className='sheet-description'>{message.mode === 'demo' ? '这是示例回复，保存后仍标记为示例。' : '请核对下方安排；原始回复会保存在草稿中。'} 日期、人数和预算暂不填入。</Text>
       <View className='form-field'><Text className='field-label'>目的地</Text><Input className='form-input' value={destination} maxlength={60} placeholder='请填写目的地' onInput={(event) => setDestination(event.detail.value)} /></View>

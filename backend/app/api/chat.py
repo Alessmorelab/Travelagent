@@ -48,6 +48,11 @@ def create_chat_router(service: ChatService | None = None):
         except ChatError as error:
             raise HTTPException(error.code, str(error)) from error
 
+    @router.post('/requests/{request_id}/cancel')
+    async def cancel_request(request_id: str, identity: str = Depends(owner)):
+        await current_service().runs().cancel_owner(identity, request_id)
+        return {'cancelled': True}
+
     @router.websocket('/ws')
     async def chat(socket: WebSocket):
         await socket.accept()
@@ -60,7 +65,7 @@ def create_chat_router(service: ChatService | None = None):
                 raise ChatError('聊天请求格式无效', 422) from error
 
             async def produce():
-                async with contextlib.aclosing(current_service().stream(request)) as events:
+                async with contextlib.aclosing(current_service().runs().subscribe(request)) as events:
                     async for event in events:
                         await socket.send_json(event)
 
@@ -68,6 +73,7 @@ def create_chat_router(service: ChatService | None = None):
                 while True:
                     message = await socket.receive_json()
                     if isinstance(message, dict) and message.get('type') == 'cancel':
+                        await current_service().runs().cancel(request)
                         return
 
             task = asyncio.create_task(produce())
@@ -76,12 +82,9 @@ def create_chat_router(service: ChatService | None = None):
             if task in done:
                 await task
             else:
-                task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
                 # Propagate a disconnected socket before trying to send a cancellation acknowledgement.
                 await receiver
-                await socket.send_json({'type': 'cancelled'})
+                await task
         except WebSocketDisconnect:
             pass
         except ChatError as error:
@@ -91,7 +94,7 @@ def create_chat_router(service: ChatService | None = None):
             with contextlib.suppress(Exception):
                 await socket.send_json({'type': 'error', 'message': '等待旅行服务超时，请重试', 'code': 504})
         except Exception:
-            logger.exception('Travel chat request failed')
+            logger.warning('Travel chat connection failed')
             with contextlib.suppress(Exception):
                 await socket.send_json({'type': 'error', 'message': '旅行服务暂不可用，请检查后端模型和工具配置', 'code': 503})
         finally:

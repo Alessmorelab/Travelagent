@@ -4,7 +4,7 @@ import { createChatClient } from '../src/services/chat-client.mjs';
 import { createMiniController } from '../src/services/wechat.mjs';
 import { createTravelStore } from '../src/domain/travel.mjs';
 
-function fixture({ promised = false, deferred = false, rejected = false } = {}) {
+function fixture({ promised = false, deferred = false, rejected = false, reconnectDelays = [] } = {}) {
   const values = new Map(), calls = [], sockets = [];
   const storage = { async getItem(key) { return values.get(key) || null; }, async setItem(key, value) { values.set(key, value); } };
   let ready;
@@ -12,7 +12,7 @@ function fixture({ promised = false, deferred = false, rejected = false } = {}) 
   let created, resolveSocket;
   const socketCreated = new Promise((resolve) => { created = resolve; });
   const deferredSocket = new Promise((resolve) => { resolveSocket = resolve; });
-  const client = createChatClient({ storage, fetch: async (url, init) => {
+  const client = createChatClient({ storage, reconnectDelays, fetch: async (url, init) => {
     calls.push({ url, init });
     return { ok: true, status: 200, async json() { return url.endsWith('/devices') ? { token: 'private-device-token' } : { conversations: [] }; } };
   }, connectSocket(options) {
@@ -43,6 +43,41 @@ test('WebSocket 逐步接收回复，凭证放在握手消息中，收到 done �
   await f.client.list('https://travel.example', 'team');
   assert.equal(f.calls.filter((call) => call.url.endsWith('/devices')).length, 1);
   assert.equal(f.calls.at(-1).init.headers.Authorization, 'Bearer private-device-token');
+});
+
+test('临时断线按事件序号恢复同一次请求，重复分片不会重复显示', async () => {
+  const f = fixture({ reconnectDelays: [0] }), events = [];
+  const pending = f.client.stream(input(), (event) => events.push(event));
+  const first = await f.connected;
+  const receive = (socket, event) => socket.handlers.message({ data: JSON.stringify(event) });
+  receive(first, { type: 'accepted', conversation_id: 'one', seq: 1 });
+  receive(first, { type: 'delta', content: '甲', seq: 2 });
+  first.handlers.close();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const second = f.sockets[1];
+  assert.equal(second.sent[0].request_id, first.sent[0].request_id);
+  assert.equal(second.sent[0].after_seq, 2);
+  assert.equal(second.sent[0].resume, true);
+  receive(second, { type: 'delta', content: '甲', seq: 2 });
+  receive(second, { type: 'delta', content: '乙', seq: 3 });
+  receive(second, { type: 'artifact', itinerary: null, warnings: [], seq: 4 });
+  receive(second, { type: 'final', content: '甲乙', seq: 5 });
+  receive(second, { type: 'done', conversation_id: 'one', seq: 6 });
+  assert.deepEqual(await pending, { response: '甲乙', thread_id: 'one' });
+  assert.equal(events.filter((event) => event.type === 'delta').length, 2);
+  assert.ok(events.some((event) => event.type === 'connection' && event.state === 'reconnecting'));
+  assert.ok(events.some((event) => event.type === 'connection' && event.state === 'connected'));
+});
+
+test('重连等待期间停止，取消原请求并清除重连定时器', async () => {
+  const f = fixture({ reconnectDelays: [50] }), controller = createMiniController();
+  const pending = f.client.stream({ ...input(), signal: controller.signal }, () => {});
+  const socket = await f.connected;
+  socket.handlers.message({ data: JSON.stringify({ type: 'accepted', seq: 1, conversation_id: 'one' }) });
+  socket.handlers.close(); controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.ok(f.calls.some((call) => call.url.endsWith('/requests/request-1/cancel')));
+  assert.equal(f.sockets.length, 1);
 });
 
 test('收到部分回复后断线属于失败，可以用同一个请求编号重试', async () => {

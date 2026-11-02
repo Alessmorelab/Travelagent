@@ -126,8 +126,63 @@ class BaiduMaps:
             markers.append({'name': str(place.get('name') or '地点')[:100],
                             'address': str(place.get('address') or '')[:200],
                             'latitude': lat, 'longitude': lon})
+            if isinstance(place.get('uid'), str):
+                markers[-1]['uid'] = place['uid'][:100]
         return {'source': result['source'], 'retrieved_at': result['retrieved_at'],
                 'coordinate_system': 'gcj02', 'places': markers}
+
+    def route_for_wechat(self, origin, destination, mode='walking'):
+        """Request GCJ-02 road geometry directly; never connect POIs as a route."""
+        if mode not in {'walking', 'driving', 'transit'}:
+            raise ToolException('出行方式无效')
+        for point in (origin, destination):
+            lat, lon = point.get('latitude'), point.get('longitude')
+            if (isinstance(lat, bool) or isinstance(lon, bool) or not isinstance(lat, (int, float))
+                    or not isinstance(lon, (int, float)) or not math.isfinite(lat) or not math.isfinite(lon)
+                    or not -90 <= lat <= 90 or not -180 <= lon <= 180):
+                raise ToolException('路线坐标无效，请重新查询地点')
+        data = self.request('/directionlite/v1/' + mode, {
+            'origin': f"{origin['latitude']:.6f},{origin['longitude']:.6f}",
+            'destination': f"{destination['latitude']:.6f},{destination['longitude']:.6f}",
+            'coord_type': 'gcj02', 'ret_coordtype': 'gcj02', 'steps_info': 1})
+        routes = (data.get('result') or {}).get('routes') or []
+        if not routes:
+            raise ToolException('未找到该出行方式的路线，请调整地点或出行方式')
+        route = routes[0]
+        distance, duration = route.get('distance'), route.get('duration')
+        if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0 for value in (distance, duration)):
+            raise ToolException('路线返回数据格式异常')
+        points = []
+        for step in route.get('steps') or []:
+            for section in step if isinstance(step, list) else [step]:
+                if not isinstance(section, dict):
+                    continue
+                path = section.get('path') or ''
+                if not isinstance(path, str) or len(path) > 1000000:
+                    raise ToolException('路线返回数据格式异常')
+                for pair in path.split(';'):
+                    if not pair:
+                        continue
+                    try:
+                        lon, lat = map(float, pair.split(','))
+                    except (TypeError, ValueError):
+                        raise ToolException('路线坐标格式异常') from None
+                    if not math.isfinite(lat) or not math.isfinite(lon) or not -90 <= lat <= 90 or not -180 <= lon <= 180:
+                        raise ToolException('路线坐标格式异常')
+                    point = {'latitude': lat, 'longitude': lon}
+                    if not points or point != points[-1]:
+                        points.append(point)
+        if len(points) < 2:
+            raise ToolException('路线未返回可绘制路径，暂时仅显示地点')
+        # Bound native component payloads; retained points all come from Baidu.
+        if len(points) > 2000:
+            stride = math.ceil(len(points) / 1999)
+            reduced = points[::stride]
+            if reduced[-1] != points[-1]:
+                reduced.append(points[-1])
+            points = reduced
+        return provenance() | {'coordinate_system': 'gcj02', 'mode': mode,
+            'distance_m': distance, 'duration_seconds': duration, 'points': points}
 
     def weather(self, city: str, district: str = ''):
         data = self.request('/weather/v1/', {'city': city, 'district': district or city, 'data_type': 'all'})

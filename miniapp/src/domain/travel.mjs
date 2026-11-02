@@ -1,4 +1,6 @@
-import { parseItinerary } from './itinerary.mjs';
+import { readSources } from './query-sources.mjs';
+import { expandActivities, expandTrip } from './activity-slots.mjs';
+import { itineraryForMessage, readItinerary, validPlace } from './map-data.mjs';
 
 export const STORAGE_KEY = 'roam.travel.v1';
 export const AGENTS = [
@@ -108,7 +110,7 @@ export function createTravelStore(storage, options = {}) {
   const toast = (message) => { clearTimeout(toastTimer); update({ toast: message }); toastTimer = setTimeout(() => update({ toast: '' }), 3000); toastTimer.unref?.(); };
   const stop = () => { pending?.controller.abort(); pending = null; };
   const validProgress = (steps, interrupted = false) => Array.isArray(steps) ? steps.filter((step) => step && typeof step.key === 'string' && typeof step.label === 'string' && ['running', 'complete', 'interrupted'].includes(step.state)).slice(-24).map((step) => ({ key: step.key.slice(0, 128), label: step.label.slice(0, 120), kind: step.kind === 'tool' ? 'tool' : 'task', state: interrupted && step.state === 'running' ? 'interrupted' : step.state })) : [];
-  const validMessages = (messages) => Array.isArray(messages) ? messages.filter((message) => message && typeof message.id === 'string' && ['user', 'assistant'].includes(message.role) && typeof message.content === 'string' && ['demo', 'live'].includes(message.mode) && AGENTS.some((agent) => agent.id === message.agent)).map((message) => ({ ...message, status: message.status === 'streaming' ? 'interrupted' : message.status, progress: validProgress(message.progress, true) })) : [];
+  const validMessages = (messages) => Array.isArray(messages) ? messages.filter((message) => message && typeof message.id === 'string' && ['user', 'assistant'].includes(message.role) && typeof message.content === 'string' && ['demo', 'live'].includes(message.mode) && AGENTS.some((agent) => agent.id === message.agent)).map((message) => ({ ...message, status: message.status === 'streaming' ? 'interrupted' : message.status, progress: validProgress(message.progress, true), itinerary: readItinerary(message.itinerary), ...(Array.isArray(message.sources) ? { sources: readSources(message.sources) } : {}) })) : [];
   const currentChat = (agent = state.agent) => {
     const messages = state.messages.filter((message) => message.agent === agent);
     if (!messages.length) return null;
@@ -154,6 +156,8 @@ export function createTravelStore(storage, options = {}) {
                 && Array.isArray(trip.completed) && trip.completed.every((key) => typeof key === 'string');
             } catch { return false; }
           });
+          for (let i = 0; i < trips.length; i++) trips[i] = { ...expandTrip(trips[i]), ...(Array.isArray(trips[i].sources) ? { sources: readSources(trips[i].sources) } : {}) };
+          for (const trip of trips) trip.days = trip.days.map((day) => day.map(({ place, ...item }) => ({ ...item, ...(validPlace(place) ? { place } : {}) })));
           const messages = validMessages(saved.messages);
           const chatHistory = Array.isArray(saved.chatHistory) ? saved.chatHistory.filter((item) => item && typeof item.id === 'string' && typeof item.title === 'string' && item.mode === 'demo' && AGENTS.some((agent) => agent.id === item.agent)).map((item) => ({ ...item, messages: validMessages(item.messages).slice(-40) })).slice(-10) : [];
           update({ chatHistory, activeChats: saved.activeChats && typeof saved.activeChats === 'object' ? Object.fromEntries(Object.entries(saved.activeChats).filter(([key, value]) => AGENTS.some((agent) => agent.id === key) && typeof value === 'string')) : {} });
@@ -204,17 +208,21 @@ export function createTravelStore(storage, options = {}) {
       const preferences = clone(state.preferences);
       const preferenceContext = state.preferencesConfirmed ? preferenceSummary(preferences) : '';
       const connection = { ...state.connection };
-      const request = { controller: createController(), id: retry && state.lastRequestId ? state.lastRequestId : uid() };
+      const request = { controller: createController(), id: retry === true && state.lastRequestId ? state.lastRequestId : uid() };
       pending = request;
-      const messages = retry ? state.messages.filter((message) => message.id !== request.id) : [...state.messages, { id: uid(), role: 'user', content: query, agent, mode: connection.mode }];
+      const messages = retry ? state.messages.filter((message) => message.id !== (retry === 'regenerate' ? state.lastRequestId : request.id)) : [...state.messages, { id: uid(), role: 'user', content: query, agent, mode: connection.mode }];
       const streaming = (connection.mode === 'live' && options.stream) || (connection.mode === 'demo' && options.demoStreaming);
       if (streaming) messages.push({ id: request.id, role: 'assistant', content: '', agent, mode: connection.mode, status: 'streaming', progress: [] });
-      update({ tab: 'assistant', messages, busy: true, error: '', progress: [], lastQuery: query, lastRequestId: request.id,
+      update({ tab: 'assistant', messages, busy: true, error: '', connectionStatus: '', progress: [], lastQuery: query, lastRequestId: request.id,
         activeChats: { ...state.activeChats, [agent]: state.activeChats[agent] || uid() } }, true);
       const onEvent = (event) => {
         if (pending !== request || request.controller.signal.aborted) return;
         if (event.type === 'accepted' && typeof event.conversation_id === 'string') {
           update({ threads: { ...state.threads, [agent]: event.conversation_id }, activeChats: { ...state.activeChats, [agent]: event.conversation_id } }, true);
+        } else if (event.type === 'artifact') {
+          update({ messages: state.messages.map((message) => message.id === request.id ? { ...message, ...('itinerary' in event ? { itinerary: readItinerary(event.itinerary) } : {}), ...('sources' in event ? { sources: readSources(event.sources) } : {}), ...('warnings' in event ? { warnings: Array.isArray(event.warnings) ? event.warnings.slice(0, 12) : [] } : {}) } : message) });
+        } else if (event.type === 'connection') {
+          update({ connectionStatus: event.state });
         } else if (event.type === 'status') {
           const step = validProgress([event])[0];
           if (!step) return;
@@ -259,10 +267,10 @@ export function createTravelStore(storage, options = {}) {
         if (pending === request) update({ progress: state.progress.map((step) => step.state === 'running' ? { ...step, state: 'interrupted' } : step), messages: state.messages.filter((message) => message.id !== request.id || message.content || message.progress?.length).map((message) => message.id === request.id ? { ...message, status: 'interrupted', progress: validProgress(message.progress, true) } : message), error: error.name === 'AbortError' ? '等待回复超时，可以重试或检查后端服务' : error.message === 'Failed to fetch' ? '暂时无法连接服务，请在「我的」检查服务地址' : error.message }, true);
       } finally {
         clearTimeout(timeout);
-        if (pending === request) { pending = null; update({ busy: false }); }
+        if (pending === request) { pending = null; update({ busy: false, connectionStatus: '' }); }
       }
     },
-    cancelMessage() { stop(); update({ busy: false, error: '', messages: state.messages.map((message) => message.status === 'streaming' ? { ...message, status: 'interrupted', progress: validProgress(message.progress, true) } : message), progress: state.progress.map((step) => step.state === 'running' ? { ...step, state: 'interrupted' } : step) }, true); toast('已停止回复'); },
+    cancelMessage() { stop(); update({ busy: false, connectionStatus: '', error: '', messages: state.messages.map((message) => message.status === 'streaming' ? { ...message, status: 'interrupted', progress: validProgress(message.progress, true) } : message), progress: state.progress.map((step) => step.state === 'running' ? { ...step, state: 'interrupted' } : step) }, true); toast('已停止回复'); },
     newConversation(agent = state.agent) {
       if (state.busy) { toast('请先停止等待，再开启新对话'); return; }
       if (!AGENTS.some((item) => item.id === agent)) return;
@@ -304,15 +312,37 @@ export function createTravelStore(storage, options = {}) {
       if (!message || message.role !== 'assistant' || message.status === 'streaming' || message.status === 'interrupted') throw new Error('请等待完整回复后再保存');
       const name = String(destination || '').trim();
       if (!name || name.length > 60) throw new Error('请填写目的地（最多60字）');
-      const parsed = parseItinerary(message.content);
+      const parsed = itineraryForMessage(message);
       if (!parsed) throw new Error('未识别到完整的按天行程，请让助手按天重新规划');
       const match = DESTINATIONS.find((item) => item.name === name);
       const trip = { id: uid(), destinationId: match?.id || null, destination: name,
         title: `${name} · ${parsed.days.length}天`, startDate: '', endDate: '', travelers: 0, budget: 0,
-        sample: message.mode === 'demo', source: 'assistant', ...parsed, completed: [] };
+        sample: message.mode === 'demo', source: 'assistant', ...parsed, destination: name, ...(Array.isArray(message.sources) ? { sources: readSources(message.sources) } : {}), completed: [] };
       update({ trips: [trip, ...state.trips], activeDay: 0, focusTripId: trip.id }, true);
       toast('已保存为行程草稿，请核对并完善');
       return trip.id;
+    },
+    openMap(kind, id) { update({ mapTarget: { kind, id } }); },
+    closeMap() { update({ mapTarget: null }); },
+    bindMapPlace(kind, id, day, index, expectedTitle, place, expectedSlot) {
+      if (!validPlace(place)) throw new Error('地点数据尚未核实');
+      const values = kind === 'trip' ? state.trips : state.messages;
+      const current = values.find((item) => item.id === id);
+      const itinerary = kind === 'trip' ? current : itineraryForMessage(current);
+      if (!itinerary?.days[day]?.[index] || itinerary.days[day][index].title !== expectedTitle) return;
+      const activity = itinerary.days[day][index];
+      if (expectedSlot && expectedSlot !== JSON.stringify([activity.title, activity.time, activity.detail])) return;
+      const days = itinerary.days.map((items, d) => items.map((item, i) => d === day && i === index ? { ...item, place: { ...place } } : item));
+      if (kind === 'trip') update({ trips: state.trips.map((item) => item.id === id ? { ...item, days } : item) }, true);
+      else update({ messages: state.messages.map((item) => item.id === id ? { ...item, itinerary: { ...itinerary, days } } : item) }, true);
+    },
+    moveActivity(tripId, day, index, direction) {
+      const trip = state.trips.find((item) => item.id === tripId);
+      const target = index + direction;
+      if (!trip || ![-1, 1].includes(direction) || !trip.days[day]?.[index] || !trip.days[day][target]) return;
+      const days = trip.days.map((items) => items.slice());
+      [days[day][index], days[day][target]] = [days[day][target], days[day][index]];
+      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed: item.completed.filter((key) => !key.startsWith(`${day}-`)) } : item) }, true);
     },
     clearTripFocus() { update({ focusTripId: '' }); },
     editActivity(tripId, day, index, value) {
@@ -322,9 +352,12 @@ export function createTravelStore(storage, options = {}) {
       if (!title || title.length > 100 || time.length > 40 || detail.length > 5000) throw new Error('请填写地点或安排，并检查内容长度');
       if (index === -1 && trip.days[day].length >= 50) throw new Error('当天最多保存50项安排');
       const days = trip.days.map((items) => items.slice());
-      const activity = { title, time: time || '时间待定', detail, icon: index < 0 ? 'compass-outline' : days[day][index].icon };
+      const previous = index >= 0 ? days[day][index] : null;
+      const activity = { title, time: time || '时间待定', detail, icon: previous?.icon || 'compass-outline', ...(previous?.title === title && validPlace(previous.place) ? { place: previous.place } : {}) };
       if (index < 0) days[day].push(activity); else days[day][index] = activity;
-      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days } : item) }, true);
+      days[day] = expandActivities(days[day]);
+      if (days[day].length > 50) throw new Error('拆分后当天安排超过50项，请减少地点');
+      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed: item.completed.filter((key) => !key.startsWith(`${day}-`)) } : item) }, true);
       toast('行程安排已保存');
     },
     removeActivity(tripId, day, index) {

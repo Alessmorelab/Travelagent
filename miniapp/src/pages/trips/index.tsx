@@ -4,6 +4,10 @@ import { Button, Input, Map, ScrollView, Text, Textarea, View } from '@tarojs/co
 import { DESTINATIONS, dayCount, formatDate } from '../../domain/travel.mjs';
 import type { Activity, State, Trip } from '../../domain/travel.mjs';
 import { Empty, Icon, PageHeading, PreferenceSheet, Scenic, Sheet, Toast } from '../../components';
+import { QuerySources } from '../../chat-components';
+import { readSources } from '../../domain/query-sources.mjs';
+import { ItineraryMap } from '../../itinerary-map';
+import { itineraryForMessage } from '../../domain/map-data.mjs';
 import { chatClient, sendQuery, store, useTravelState } from '../../stores/travel';
 
 function PlaceMapView({ state, initialCity, onClose }: { state: State; initialCity: string; onClose: () => void }) {
@@ -59,6 +63,7 @@ function ActivitySheet({ trip, day, index, onClose }: { trip: Trip; day: number;
     <View className='form-field'><Text className='field-label'>时间</Text><Input className='form-input' value={value.time} maxlength={40} placeholder='例如：上午或 09:00' onInput={(e) => setValue({ ...value, time: e.detail.value })} /></View>
     <View className='form-field'><Text className='field-label'>备注</Text><Textarea className='form-input trip-note-input' value={value.detail} maxlength={5000} placeholder='添加玩法、交通或提醒' onInput={(e) => setValue({ ...value, detail: e.detail.value })} /></View>
     {error && <Text className='form-error'>{error}</Text>}
+    {existing && <View className='button-row'><Button className='text-button' disabled={index === 0} onClick={() => { store.moveActivity(trip.id, day, index, -1); onClose(); }}>上移</Button><Button className='text-button' disabled={index === trip.days[day].length - 1} onClick={() => { store.moveActivity(trip.id, day, index, 1); onClose(); }}>下移</Button></View>}
     <View className='button-row'>{existing && <Button className='secondary-button' onClick={() => void remove()}>删除这项</Button>}<Button className='primary-button' onClick={save}>保存安排</Button></View>
   </Sheet>;
 }
@@ -68,6 +73,7 @@ export default function TripsPage() {
   const [selectedId, setSelectedId] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [showSources, setShowSources] = useState(false);
   const [showSource, setShowSource] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   useDidShow(() => { const id = store.getState().focusTripId; if (id) { setSelectedId(id); store.clearTripFocus(); } });
@@ -87,6 +93,12 @@ export default function TripsPage() {
     store.setAgent('team');
     sendQuery(`帮我完善${trip.destination}的${dayCount(trip)}天旅行计划。${details ? details + '。' : ''}请先确认交通与住宿需求。`);
   };
+  const mapTarget = state.mapTarget;
+  const mapTrip = mapTarget?.kind === 'trip' ? state.trips.find((item) => item.id === mapTarget.id) : null;
+  const mapMessage = mapTarget?.kind === 'message' ? state.messages.find((item) => item.id === mapTarget.id) : null;
+  const mapItinerary = mapMessage ? itineraryForMessage(mapMessage) : null;
+  if (mapTarget && (mapTrip || mapItinerary)) return <ItineraryMap key={`${mapTarget.kind}-${mapTarget.id}`} state={state} kind={mapTarget.kind} id={mapTarget.id}
+    days={(mapTrip || mapItinerary)!.days} destination={(mapTrip || mapItinerary)!.destination} sample={mapTrip?.sample || mapMessage?.mode === 'demo'} onClose={() => store.closeMap()} />;
   if (mapOpen) return <PlaceMapView state={state} initialCity={trip?.destination || ''} onClose={() => setMapOpen(false)} />;
   return <View className='page'><PageHeading en='MY JOURNEYS' title='我的行程' subtitle='把期待，变成出发。' action={create} /><Button className='text-button' onClick={() => setMapOpen(true)}>⌖ 地点地图</Button>
     {!trip ? <Empty icon='map' title='下一站，还在等你' description='创建一份行程草稿，慢慢填满旅途的每一天。' action='新建行程' onClick={create} /> : <>
@@ -95,13 +107,16 @@ export default function TripsPage() {
       <View className='budget-strip'><View><Text className='muted'>{trip.sample ? '示例总预算' : '计划总预算'}</Text><Text className='budget-number'>{trip.budget ? `¥ ${trip.budget.toLocaleString()}` : '待填写'}</Text></View><View className='budget-right'><Text>{dayCount(trip)}天 {Math.max(0, dayCount(trip) - 1)}晚</Text><Text className='muted'>实际费用以预订时为准</Text></View></View>
       <ScrollView scrollX className='day-tabs'>{trip.days.map((_, index) => { let label = '日期待定'; if (trip.startDate) { const date = new Date(`${trip.startDate}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + index); label = formatDate(date.toISOString().slice(0, 10)); } return <View key={index} className={`day-tab ${day === index ? 'active' : ''}`} onClick={() => store.setActiveDay(index)}><Text>DAY {String(index + 1).padStart(2, '0')}</Text><Text>{label}</Text></View>; })}</ScrollView>
       <View className='timeline'>{trip.days[day].map((activity, index) => { const key = `${day}-${index}`; const done = trip.completed.includes(key); return <View key={key} className={`timeline-item ${done ? 'done' : ''}`}><View className='timeline-icon'><Icon name={activity.icon} /></View><View className='timeline-copy' onClick={() => setEditIndex(index)}><Text className='timeline-time'>{activity.time}</Text><Text className='timeline-title'>{activity.title}</Text><Text className='timeline-description'>{activity.detail}</Text><Text className='activity-edit-hint'>点击编辑</Text></View><Button className={`activity-check ${done ? 'checked' : ''}`} ariaLabel={`${done ? '标记未完成' : '标记完成'}：${activity.title}`} onClick={() => store.toggleActivity(trip.id, key)}>{done ? '✓' : ''}</Button></View>; })}</View>
+      <Button className='text-button' onClick={() => store.openMap('trip', trip.id)}>⌖ 查看行程地图</Button>
       <Button className='text-button' onClick={() => setEditIndex(-1)}>＋ 添加当天安排</Button>
+
       {trip.notes && <View className='import-day'><Text>行程附注</Text><Text selectable>{trip.notes}</Text></View>}
       <Text className='note'>{trip.sample ? '这是体验用的示例行程，未查询真实票价、开放时间或可用性。' : '这是行程草稿，具体活动与交通仍需确认。'} 点击安排可编辑，点击右侧圆圈记录进度。</Text>
       <View className='trip-progress'><Text>已完成 {trip.completed.length} / {trip.days.reduce((total, activities) => total + activities.length, 0)} 项安排</Text><View className='progress-track'><View className='progress-fill' style={{ width: `${Math.min(100, trip.completed.length / Math.max(1, trip.days.flat().length) * 100)}%` }} /></View></View>
-      <View className='trip-actions'><Button className='text-button' onClick={plan}>让旅行搭子完善 →</Button>{trip.sourceText && <Button className='text-button' onClick={() => setShowSource(true)}>查看原始回复</Button>}<Button className='text-button danger' onClick={() => void remove()}>删除行程</Button></View>
+      <View className='trip-actions'><Button className='text-button' onClick={plan}>让旅行搭子完善 →</Button>{trip.source === 'assistant' && <Button className='text-button' onClick={() => setShowSources(true)}>查询依据</Button>}{trip.sourceText && <Button className='text-button' onClick={() => setShowSource(true)}>查看原始回复</Button>}<Button className='text-button danger' onClick={() => void remove()}>删除行程</Button></View>
     </>}
     {trip && editIndex !== null && <ActivitySheet key={`${trip.id}-${day}-${editIndex}`} trip={trip} day={day} index={editIndex} onClose={() => setEditIndex(null)} />}
+    {trip && showSources && <QuerySources sources={readSources(trip.sources)} available={Array.isArray(trip.sources)} onClose={() => setShowSources(false)} />}
     {trip?.sourceText && showSource && <Sheet title='原始回复' onClose={() => setShowSource(false)}><Text className='trip-source-text' selectable>{trip.sourceText}</Text></Sheet>}
     {formOpen && <PreferenceSheet kind='trip' state={state} onClose={() => setFormOpen(false)} />}<Toast state={state} />
   </View>;

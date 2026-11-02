@@ -13,6 +13,8 @@ class StartMessage(BaseModel):
     request_id: str = Field(min_length=1, max_length=100)
     query: str = Field(min_length=1, max_length=5000)
     preferences: str = Field(default='', max_length=1500)
+    after_seq: int = Field(default=0, ge=0, le=10000)
+    resume: bool = False
 
     @field_validator('query')
     @classmethod

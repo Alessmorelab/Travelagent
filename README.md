@@ -67,7 +67,7 @@ docker compose up -d postgres
 
 小程序「我的 → 旅行服务」填写后端地址，测试连接并保存真实服务模式。正式环境配置 HTTPS、WSS 及微信合法域名。手机上的 `localhost` 指手机自己，不能用来访问电脑后端。
 
-「行程 → 地点地图」可按城市和关键词查询并显示地点。该入口由后端调用百度地点检索 Web API 和官方坐标转换 API，将 BD-09 转换为微信地图使用的 GCJ-02；转换失败时不显示未经转换的坐标。服务端 AK 需要开通这两项服务，使用 SN 校验时还需配置 SK。该入口独立于 MCP，尚未绘制路线。
+「行程 → 地点地图」可按城市和关键词查询并显示地点。该入口由后端调用百度地点检索 Web API 和官方坐标转换 API，将 BD-09 转换为微信地图使用的 GCJ-02；转换失败时不显示未经转换的坐标。服务端 AK 需要开通这两项服务，使用 SN 校验时还需配置 SK。该入口独立于 MCP。AI 回复和已保存行程另支持按天地图、同名地点确认、步行/驾车/公交路线与分段重试；路线也需要开通对应 Web API 权限。
 
 ### 百度 MCP 配置与自检
 
@@ -99,8 +99,11 @@ BAIDU_MAP_TRANSPORT=mcp
 | `GET /api/v1/chat/conversations/{id}` | 会话内容 |
 | `DELETE /api/v1/chat/conversations/{id}` | 删除会话 |
 | `POST /api/v1/map/places` | 查询地点并转换为小程序地图坐标 |
+| `POST /api/v1/map/resolve` | 批量查询当天地点，保留候选与部分错误 |
+| `POST /api/v1/map/routes` | 查询真实 GCJ-02 路径，可只重试指定路段 |
+| `POST /api/v1/chat/requests/{id}/cancel` | 断线时仍可停止当前安装的请求 |
 
-历史接口使用 Bearer 凭证；WebSocket 首条 `start` 消息携带凭证。事件包括 `accepted/status/delta/final/done/error/cancelled`。后端保存后再发送 `done`，重试可复用已完成的结果；中断回复明确标注，重试可能重新调用模型。
+历史接口使用 Bearer 凭证；WebSocket 首条 `start` 消息携带凭证。事件包括 `accepted/status/delta/final/artifact/done/error/cancelled` 和心跳。业务事件携带递增 `seq`；断线重连使用相同请求编号与 `after_seq` 补发遗漏事件，已完成结果从数据库回放。主动停止才取消任务；进程重启后的未完成任务会明确提示中断。部署当前使用单个 Uvicorn worker。详见[行程地图与异常恢复](docs/map-and-resilience.md)。
 
 小程序通过聊天服务访问旅行助手。
 
@@ -119,11 +122,11 @@ npm run check:runtime
 
 ```sh
 .venv/bin/python -m pip install pytest pytest-asyncio httpx pgserver==0.1.4
-.venv/bin/python -m pytest -q tests/test_chat_api.py tests/test_chat_runner.py tests/test_chat_storage.py tests/test_baidu_maps.py tests/test_baidu_mcp.py
+.venv/bin/python -m pytest -q tests/test_chat_api.py tests/test_chat_runner.py tests/test_chat_storage.py tests/test_baidu_maps.py tests/test_baidu_mcp.py tests/test_chat_resilience.py tests/test_itinerary_map.py
 ```
 
 `pgserver` 仅提供临时 PostgreSQL 测试实例所需的二进制，不访问用户数据库，也不属于生产运行依赖。未安装、平台不适用或主机沙箱禁止创建共享内存时，实际 PostgreSQL 测试会明确跳过。测试涵盖连接协议、所有权、取消、重试、旧 SQLite 兼容和数据库并发。本次环境的 PostgreSQL 实例启动被共享内存权限拦截，尚未完成实库连接验证。
 
 百度地图鉴权排查：220 表示 Referer 校验失败，后端应新建服务端类型 AK；210 表示服务器出口 IP 未通过应用白名单校验；211 表示 SN 校验失败，检查 SK；240 表示尚未启用对应 API。日志和公开工具错误不会显示带 AK 的请求 URL。
 
-当前身份按小程序安装隔离，尚未接入微信账号登录或跨设备同步。百度 MCP 已接入后端工具目录，业务查询仍取决于应用权限、服务开通与网络。地点地图支持手动检索和标记，尚未绘制路线。高铁余票、语音尚未接入。手机微信效果需要独立验证；自动化页面挂载不能替代真机检查。
+当前身份按小程序安装隔离，尚未接入微信账号登录或跨设备同步。百度 MCP 已接入后端工具目录，业务查询仍取决于应用权限、服务开通与网络。地点地图支持手动检索、按天行程地点和真实路线；路线失败时保留地点与成功路段。高铁余票、语音尚未接入。手机微信效果需要独立验证；自动化页面挂载不能替代真机检查。

@@ -281,9 +281,11 @@ async def test_factual_request_actually_queries_provider_before_answering(monkey
         monkeypatch.setattr(runner, 'graph_for', lambda _: graph)
         events = [event async for event in runner.stream_travel('destinations', [], query)]
     assert lookups == (['武汉'] if required else [])
-    assert len(requests) == (2 if required else 1)
+    # The worker summary is unused by the final answer. A completed place
+    # query should go straight to answer generation without another LLM call.
+    assert len(requests) == 1
     if required:
-        assert requests[0]['tool_choice'] == 'required' and requests[1].get('tool_choice') != 'required'
+        assert requests[0]['tool_choice'] == 'required'
         assert any(event.get('kind') == 'tool' and event['state'] == 'complete' for event in events)
     assert next(event for event in events if event['type'] == 'final')['content'] == ('武汉行程建议' if required else '你好')
     assert 'PRIVATE_WORKER_REPLY' not in str(events)

@@ -17,7 +17,8 @@ new Function('require', 'module', 'exports', code)((name) => {
   if (name === '@tarojs/components') return { View: 'view', Text: 'text', Button: 'button', Textarea: 'textarea', RichText: 'rich-text' };
   if (name === '@tarojs/taro' || name === './components' || name === './stores/travel') return {};
   if (name === './domain/travel.mjs') return { AGENTS: [] };
-  if (name === './domain/itinerary.mjs') return { parseItinerary: () => null };
+  if (name === './domain/query-sources.mjs') return { readSources: () => [] };
+  if (name === './domain/map-data.mjs') return { itineraryForMessage: () => null };
   if (name === './domain/message-format.mjs') return { formatAssistantMessage };
   return require(name);
 }, compiled, compiled.exports);

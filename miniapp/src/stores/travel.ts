@@ -28,7 +28,7 @@ export function goTab(tab: Tab) {
   void Taro.switchTab({ url: tabPaths[tab] }).catch(() => store.toast('页面暂时无法打开，请重试'));
 }
 
-export function sendQuery(query: string, retry = false) {
+export function sendQuery(query: string, retry: boolean | 'regenerate' = false) {
   if (!query.trim() || store.getState().busy) return;
   goTab('assistant');
   void store.sendMessage(query, retry);

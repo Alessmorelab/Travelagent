@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import hashlib
 import secrets
 import time
@@ -11,7 +12,7 @@ from sqlalchemy import delete, insert, select, update
 
 from backend.app.core.database import create_database
 from backend.app.core.errors import ChatError
-from backend.app.models.chat import conversations, devices, metadata, turns, turn_steps
+from backend.app.models.chat import conversations, devices, metadata, turns, turn_steps, turn_payloads, turn_events
 
 
 class ChatRepository:
@@ -103,6 +104,8 @@ class ChatRepository:
             if existing:
                 turn_id = existing['id']
                 db.execute(delete(turn_steps).where(turn_steps.c.turn_id == turn_id))
+                db.execute(delete(turn_payloads).where(turn_payloads.c.turn_id == turn_id))
+                db.execute(delete(turn_events).where(turn_events.c.turn_id == turn_id))
                 db.execute(update(turns).where(turns.c.id == turn_id).values(status='pending', response='', updated=now))
             else:
                 turn_id = str(uuid.uuid4())
@@ -110,6 +113,40 @@ class ChatRepository:
                            query=query, model_query=model_query, response='', status='pending', created=now, updated=now))
             db.execute(update(conversations).where(conversations.c.id == conversation_id).values(updated=now))
             return dict(db.execute(select(turns).where(turns.c.id == turn_id)).mappings().one()), False
+
+    def find_request(self, owner, request_id):
+        with self.engine.connect() as db:
+            row = db.execute(select(turns).join(conversations).where(
+                conversations.c.owner == owner, turns.c.request_id == request_id)).mappings().first()
+        return dict(row) if row else None
+
+    def get_agent(self, owner, conversation_id):
+        with self.engine.connect() as db:
+            return self.owned(db, owner, conversation_id)['agent']
+
+    def save_payload(self, turn_id, payload):
+        with self.transaction() as db:
+            previous = db.scalar(select(turn_payloads.c.payload).where(turn_payloads.c.turn_id == turn_id))
+            value = json.dumps({**(json.loads(previous) if previous else {}), **payload}, ensure_ascii=False)
+            if previous is None:
+                db.execute(insert(turn_payloads).values(turn_id=turn_id, payload=value))
+            else:
+                db.execute(update(turn_payloads).where(turn_payloads.c.turn_id == turn_id).values(payload=value))
+
+    def payload(self, turn_id):
+        with self.engine.connect() as db:
+            value = db.scalar(select(turn_payloads.c.payload).where(turn_payloads.c.turn_id == turn_id))
+        return json.loads(value) if value else {}
+
+    def append_event(self, turn_id, event):
+        with self.transaction() as db:
+            db.execute(insert(turn_events).values(turn_id=turn_id, seq=event['seq'], payload=json.dumps(event, ensure_ascii=False)))
+
+    def events(self, turn_id, after=0):
+        with self.engine.connect() as db:
+            rows = db.scalars(select(turn_events.c.payload).where(turn_events.c.turn_id == turn_id,
+                              turn_events.c.seq > after).order_by(turn_events.c.seq)).all()
+        return [json.loads(row) for row in rows]
 
     def finish(self, turn_id: str, response: str, status: str):
         with self.transaction() as db:
@@ -177,6 +214,7 @@ class ChatRepository:
                 messages.append({'id': turn['id'] + '-assistant', 'role': 'assistant', 'content': turn['response'],
                                  'agent': conversation['agent'], 'mode': 'live',
                                  'progress': progress.get(turn['id'], []),
+                                 **self.payload(turn['id']),
                                  'status': 'complete' if turn['status'] == 'complete' else 'interrupted'})
         return conversation | {'messages': messages}
 
