@@ -6,6 +6,9 @@ import type { Activity, State, Trip } from '../../domain/travel.mjs';
 import { Empty, Icon, PageHeading, PreferenceSheet, Scenic, Sheet, Toast } from '../../components';
 import { QuerySources } from '../../chat-components';
 import { readSources } from '../../domain/query-sources.mjs';
+import { TripDetailsSheet } from '../../trip-details-sheet';
+import { SavedPlaceButton } from '../../saved-place-button';
+import { formatTripText } from '../../domain/trip-details.mjs';
 import { ItineraryMap } from '../../itinerary-map';
 import { itineraryForMessage } from '../../domain/map-data.mjs';
 import { chatClient, sendQuery, store, useTravelState } from '../../stores/travel';
@@ -15,6 +18,7 @@ function PlaceMapView({ state, initialCity, onClose }: { state: State; initialCi
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [searchedCity, setSearchedCity] = useState('');
   const [result, setResult] = useState<Awaited<ReturnType<typeof chatClient.searchPlaces>> | null>(null);
   const active = useRef(true);
   useEffect(() => () => { active.current = false; }, []);
@@ -23,7 +27,7 @@ function PlaceMapView({ state, initialCity, onClose }: { state: State; initialCi
     if (!cityValue || !queryValue) { setError('请填写城市和地点关键词'); return; }
     if (state.connection.mode !== 'live') { setError('请先在「我的 → 旅行服务」连接真实服务'); return; }
     setLoading(true); setError(''); setResult(null);
-    try { const data = await chatClient.searchPlaces(state.connection.apiUrl, cityValue, queryValue); if (active.current) setResult(data); }
+    try { const data = await chatClient.searchPlaces(state.connection.apiUrl, cityValue, queryValue); if (active.current) { setSearchedCity(cityValue); setResult(data); } }
     catch (e) { if (active.current) setError((e as Error).message || '地点查询失败'); }
     finally { if (active.current) setLoading(false); }
   };
@@ -41,7 +45,7 @@ function PlaceMapView({ state, initialCity, onClose }: { state: State; initialCi
     {!!places.length && <><Map className='place-map' latitude={places[0].latitude} longitude={places[0].longitude} markers={markers}
       includePoints={places.map((place) => ({ latitude: place.latitude, longitude: place.longitude }))} scale={12} onError={() => setError('地图加载失败，请检查微信开发者工具或网络')} />
       <Text className='note'>来源：{result?.source} · 查询时间：{result?.retrieved_at}</Text>
-      {places.map((place, index) => <View className='place-map-result' key={`${index}-${place.name}`}><Text>{place.name}</Text><Text>{place.address || '地址未提供'}</Text></View>)}
+      {places.map((place, index) => <View className='place-map-result' key={`${index}-${place.name}`}><Text>{place.name}</Text><Text>{place.address || '地址未提供'}</Text><SavedPlaceButton state={state} city={searchedCity} place={{ ...place, coordinate_system: 'gcj02', source: result!.source, retrieved_at: result!.retrieved_at }} /></View>)}
     </>}
   </View>;
 }
@@ -71,6 +75,7 @@ function ActivitySheet({ trip, day, index, onClose }: { trip: Trip; day: number;
 export default function TripsPage() {
   const state = useTravelState('trips');
   const [selectedId, setSelectedId] = useState('');
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [showSources, setShowSources] = useState(false);
@@ -80,6 +85,11 @@ export default function TripsPage() {
   const trip = state.trips.find((item) => item.id === selectedId) || state.trips[0];
   const destination = DESTINATIONS.find((item) => item.id === trip?.destinationId);
   const day = Math.max(0, Math.min(state.activeDay, (trip?.days.length || 1) - 1));
+  const copy = async () => {
+    if (!trip) return;
+    try { await Taro.setClipboardData({ data: formatTripText(trip) }); store.toast('行程已复制，可粘贴分享给同行人'); }
+    catch (e) { store.toast((e as Error).message || '复制失败，请稍后重试'); }
+  };
   const create = () => { setSelectedId(''); setFormOpen(true); };
   const remove = async () => {
     if (!trip) return;
@@ -104,17 +114,20 @@ export default function TripsPage() {
     {!trip ? <Empty icon='map' title='下一站，还在等你' description='创建一份行程草稿，慢慢填满旅途的每一天。' action='新建行程' onClick={create} /> : <>
       {state.trips.length > 1 && <ScrollView scrollX className='trip-select'>{state.trips.map((item) => <Button key={item.id} className={item.id === trip.id ? 'active' : ''} onClick={() => { setSelectedId(item.id); store.setActiveDay(0); }}>{item.title}</Button>)}</ScrollView>}
       <Scenic destination={destination} className='trip-cover'><View className='trip-cover-copy'><Text className='trip-status'>{trip.sample ? '示例行程 · 待核对' : '行程草稿 · 待完善'}</Text><Text className='trip-title'>{trip.title}</Text><Text>{trip.startDate ? `${formatDate(trip.startDate)} — ${formatDate(trip.endDate)}` : '日期待填写'} · {trip.travelers ? `${trip.travelers}人同行` : '人数待填写'}</Text></View></Scenic>
+      <Button className='text-button' onClick={() => setDetailsOpen(true)}>编辑日期、人数与预算 →</Button>
       <View className='budget-strip'><View><Text className='muted'>{trip.sample ? '示例总预算' : '计划总预算'}</Text><Text className='budget-number'>{trip.budget ? `¥ ${trip.budget.toLocaleString()}` : '待填写'}</Text></View><View className='budget-right'><Text>{dayCount(trip)}天 {Math.max(0, dayCount(trip) - 1)}晚</Text><Text className='muted'>实际费用以预订时为准</Text></View></View>
       <ScrollView scrollX className='day-tabs'>{trip.days.map((_, index) => { let label = '日期待定'; if (trip.startDate) { const date = new Date(`${trip.startDate}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + index); label = formatDate(date.toISOString().slice(0, 10)); } return <View key={index} className={`day-tab ${day === index ? 'active' : ''}`} onClick={() => store.setActiveDay(index)}><Text>DAY {String(index + 1).padStart(2, '0')}</Text><Text>{label}</Text></View>; })}</ScrollView>
       <View className='timeline'>{trip.days[day].map((activity, index) => { const key = `${day}-${index}`; const done = trip.completed.includes(key); return <View key={key} className={`timeline-item ${done ? 'done' : ''}`}><View className='timeline-icon'><Icon name={activity.icon} /></View><View className='timeline-copy' onClick={() => setEditIndex(index)}><Text className='timeline-time'>{activity.time}</Text><Text className='timeline-title'>{activity.title}</Text><Text className='timeline-description'>{activity.detail}</Text><Text className='activity-edit-hint'>点击编辑</Text></View><Button className={`activity-check ${done ? 'checked' : ''}`} ariaLabel={`${done ? '标记未完成' : '标记完成'}：${activity.title}`} onClick={() => store.toggleActivity(trip.id, key)}>{done ? '✓' : ''}</Button></View>; })}</View>
       <Button className='text-button' onClick={() => store.openMap('trip', trip.id)}>⌖ 查看行程地图</Button>
       <Button className='text-button' onClick={() => setEditIndex(-1)}>＋ 添加当天安排</Button>
 
+      {trip.userNotes && <View className='import-day'><Text>出行备注</Text><Text selectable>{trip.userNotes}</Text></View>}
       {trip.notes && <View className='import-day'><Text>行程附注</Text><Text selectable>{trip.notes}</Text></View>}
       <Text className='note'>{trip.sample ? '这是体验用的示例行程，未查询真实票价、开放时间或可用性。' : '这是行程草稿，具体活动与交通仍需确认。'} 点击安排可编辑，点击右侧圆圈记录进度。</Text>
       <View className='trip-progress'><Text>已完成 {trip.completed.length} / {trip.days.reduce((total, activities) => total + activities.length, 0)} 项安排</Text><View className='progress-track'><View className='progress-fill' style={{ width: `${Math.min(100, trip.completed.length / Math.max(1, trip.days.flat().length) * 100)}%` }} /></View></View>
-      <View className='trip-actions'><Button className='text-button' onClick={plan}>让旅行搭子完善 →</Button>{trip.source === 'assistant' && <Button className='text-button' onClick={() => setShowSources(true)}>查询依据</Button>}{trip.sourceText && <Button className='text-button' onClick={() => setShowSource(true)}>查看原始回复</Button>}<Button className='text-button danger' onClick={() => void remove()}>删除行程</Button></View>
+      <View className='trip-actions'><Button className='text-button' onClick={() => void copy()}>复制行程</Button><Button className='text-button' onClick={plan}>让旅行搭子完善 →</Button>{trip.source === 'assistant' && <Button className='text-button' onClick={() => setShowSources(true)}>查询依据</Button>}{trip.sourceText && <Button className='text-button' onClick={() => setShowSource(true)}>查看原始回复</Button>}<Button className='text-button danger' onClick={() => void remove()}>删除行程</Button></View>
     </>}
+    {trip && detailsOpen && <TripDetailsSheet key={trip.id} trip={trip} onClose={() => setDetailsOpen(false)} />}
     {trip && editIndex !== null && <ActivitySheet key={`${trip.id}-${day}-${editIndex}`} trip={trip} day={day} index={editIndex} onClose={() => setEditIndex(null)} />}
     {trip && showSources && <QuerySources sources={readSources(trip.sources)} available={Array.isArray(trip.sources)} onClose={() => setShowSources(false)} />}
     {trip?.sourceText && showSource && <Sheet title='原始回复' onClose={() => setShowSource(false)}><Text className='trip-source-text' selectable>{trip.sourceText}</Text></Sheet>}

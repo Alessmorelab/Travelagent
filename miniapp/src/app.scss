@@ -318,3 +318,12 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .query-source > text { display: block; font-size: 23px; line-height: 1.8; overflow-wrap: anywhere; }
 .query-source-title { font-weight: 600; }
 .query-source > .query-source-excerpt { white-space: pre-wrap; font-size: 20px; color: $muted; }
+.saved-place-tabs { display: flex; gap: 16px; margin: 10px 0 28px; }
+.saved-place-tabs > button { flex: 1; padding: 20px 12px; border: 1px solid $line; border-radius: 16px; font-size: 24px; color: $muted; }
+.saved-place-tabs > .active { background: $ink; color: #fff; border-color: $ink; }
+.saved-place-search { margin-bottom: 28px; }
+.saved-place-card { margin: 20px 0; padding: 26px; border: 1px solid $line; border-radius: 20px; background: $white; }
+.saved-place-card > text { display: block; font-size: 25px; line-height: 1.8; }
+.saved-place-card > .saved-place-title { font-size: 30px; font-weight: 600; }
+.saved-place-card > .muted { font-size: 21px; }
+.saved-place-actions { display: flex; flex-wrap: wrap; gap: 26px; }

@@ -1,3 +1,5 @@
+import { cleanSavedPlace, readSavedPlaces, samePlace } from './saved-places.mjs';
+import { validateTripDetails } from './trip-details.mjs';
 import { readSources } from './query-sources.mjs';
 import { expandActivities, expandTrip } from './activity-slots.mjs';
 import { itineraryForMessage, readItinerary, validPlace } from './map-data.mjs';
@@ -34,13 +36,13 @@ const kyotoDays = [
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
-export function initialState(apiUrl = 'http://localhost:8000') {
+export function initialState(apiUrl = 'http://127.0.0.1:8000') {
   return {
     tab: 'assistant', agent: 'team', filter: '全部', activeDay: 0, busy: false, error: '', toast: '', hydrated: false,
-    connection: { mode: 'demo', apiUrl },
+    connection: { mode: 'live', apiUrl },
     preferences: { origin: '武汉', destination: '京都', startDate: '2026-11-07', endDate: '2026-11-10', travelers: 2, budget: 8000, style: '松弛慢游' },
     preferencesConfirmed: false,
-    favorites: ['kyoto', 'alps'], messages: [], threads: {}, progress: [], chatHistory: [], activeChats: {},
+    favorites: ['kyoto', 'alps'], savedPlaces: [], messages: [], threads: {}, progress: [], chatHistory: [], activeChats: {},
     trips: [{ id: 'kyoto-sample', destinationId: 'kyoto', title: '京都慢游 · 4天3晚', destination: '京都', startDate: '2026-11-07', endDate: '2026-11-10', travelers: 2, budget: 8000, sample: true, days: clone(kyotoDays), completed: [] }],
   };
 }
@@ -100,8 +102,8 @@ export function createTravelStore(storage, options = {}) {
   const createController = options.createAbortController || (() => new AbortController());
   const emit = () => listeners.forEach((listener) => listener(state));
   const persist = () => {
-    const { connection, preferences, preferencesConfirmed, favorites, messages, threads, trips, chatHistory, activeChats } = state;
-    const serialized = JSON.stringify({ version: 1, connection, preferences, preferencesConfirmed, favorites, messages: messages.slice(-80), threads, trips, chatHistory: chatHistory.slice(-10), activeChats });
+    const { connection, preferences, preferencesConfirmed, favorites, savedPlaces, messages, threads, trips, chatHistory, activeChats } = state;
+    const serialized = JSON.stringify({ version: 2, connection, preferences, preferencesConfirmed, favorites, savedPlaces, messages: messages.slice(-80), threads, trips, chatHistory: chatHistory.slice(-10), activeChats });
     writeQueue = writeQueue.then(() => storage.setItem(STORAGE_KEY, serialized)).catch(() => {
       state = { ...state, toast: '本次修改尚未保存，请检查本地存储空间' }; emit();
     });
@@ -128,17 +130,22 @@ export function createTravelStore(storage, options = {}) {
     getState: () => state,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     async hydrate() {
+      let migrated = false;
       try {
         const raw = await storage.getItem(STORAGE_KEY);
         if (raw) {
           const saved = JSON.parse(raw);
-          if (saved.version !== 1) throw new Error('Unsupported data');
+          if (![1, 2].includes(saved.version)) throw new Error('Unsupported data');
           const preferences = validatePreferences(saved.preferences);
           // Older versions saved the sample Kyoto preferences automatically.
           const defaults = initialState().preferences;
           const preferencesConfirmed = typeof saved.preferencesConfirmed === 'boolean' ? saved.preferencesConfirmed
             : Object.keys(defaults).some((key) => preferences[key] !== defaults[key]);
-          const connection = checkConnection(saved.connection);
+          // 首次升级到真实服务默认值；之后保留用户主动选择的模式和地址。
+          const connection = checkConnection({ ...saved.connection,
+            ...(saved.version === 1 ? { mode: 'live' } : {}),
+            ...(!saved.connection?.apiUrl || /^https?:\/\/api\.example\.com\/?$/i.test(saved.connection.apiUrl)
+              ? { apiUrl: initialState(options.apiUrl).connection.apiUrl } : {}) });
           if (!Array.isArray(saved.favorites) || !Array.isArray(saved.trips) || !Array.isArray(saved.messages)) throw new Error('Invalid data');
           const trips = saved.trips.filter((trip) => {
             try {
@@ -146,9 +153,9 @@ export function createTravelStore(storage, options = {}) {
               if (!['destination', 'startDate', 'endDate'].every((key) => typeof trip[key] === 'string')
                 || typeof trip.travelers !== 'number' || typeof trip.budget !== 'number') return false;
               if (trip.source === 'assistant') {
-                if (!trip.destination.trim() || trip.startDate || trip.endDate || trip.travelers !== 0 || trip.budget !== 0
-                  || typeof trip.sourceText !== 'string' || trip.sourceText.length > 30000 || typeof trip.notes !== 'string') return false;
-              } else validatePreferences({ ...preferences, ...trip });
+                if (!trip.destination.trim() || typeof trip.sourceText !== 'string' || trip.sourceText.length > 30000 || typeof trip.notes !== 'string') return false;
+              }
+              validateTripDetails(trip, trip.days?.length);
               return typeof trip.id === 'string' && typeof trip.title === 'string' && typeof trip.sample === 'boolean'
                 && Array.isArray(trip.days) && trip.days.length > 0 && trip.days.length <= 30 && trip.days.length === dayCount(trip)
                 && trip.days.every((day) => Array.isArray(day) && day.every((item) => item
@@ -156,15 +163,18 @@ export function createTravelStore(storage, options = {}) {
                 && Array.isArray(trip.completed) && trip.completed.every((key) => typeof key === 'string');
             } catch { return false; }
           });
-          for (let i = 0; i < trips.length; i++) trips[i] = { ...expandTrip(trips[i]), ...(Array.isArray(trips[i].sources) ? { sources: readSources(trips[i].sources) } : {}) };
+          for (let i = 0; i < trips.length; i++) trips[i] = { ...expandTrip(trips[i]), ...validateTripDetails(trips[i], trips[i].days.length), ...(Array.isArray(trips[i].sources) ? { sources: readSources(trips[i].sources) } : {}) };
           for (const trip of trips) trip.days = trip.days.map((day) => day.map(({ place, ...item }) => ({ ...item, ...(validPlace(place) ? { place } : {}) })));
           const messages = validMessages(saved.messages);
           const chatHistory = Array.isArray(saved.chatHistory) ? saved.chatHistory.filter((item) => item && typeof item.id === 'string' && typeof item.title === 'string' && item.mode === 'demo' && AGENTS.some((agent) => agent.id === item.agent)).map((item) => ({ ...item, messages: validMessages(item.messages).slice(-40) })).slice(-10) : [];
           update({ chatHistory, activeChats: saved.activeChats && typeof saved.activeChats === 'object' ? Object.fromEntries(Object.entries(saved.activeChats).filter(([key, value]) => AGENTS.some((agent) => agent.id === key) && typeof value === 'string')) : {} });
-          update({ preferences, preferencesConfirmed, connection, favorites: saved.favorites.filter((id) => DESTINATIONS.some((d) => d.id === id)), trips, messages, threads: saved.threads && typeof saved.threads === 'object' ? Object.fromEntries(Object.entries(saved.threads).filter(([key, value]) => AGENTS.some((a) => a.id === key) && typeof value === 'string')) : {} });
+          update({ preferences, preferencesConfirmed, connection, savedPlaces: readSavedPlaces(saved.savedPlaces), favorites: saved.favorites.filter((id) => DESTINATIONS.some((d) => d.id === id)), trips, messages, threads: saved.threads && typeof saved.threads === 'object' ? Object.fromEntries(Object.entries(saved.threads).filter(([key, value]) => AGENTS.some((a) => a.id === key) && typeof value === 'string')) : {} });
+          migrated = saved.version === 1;
         }
       } catch { toast('已载入初始体验，本地记录暂时无法读取'); }
       update({ hydrated: true });
+      // 写回升级结果，下一次打开时不再覆盖用户新保存的示例模式设置。
+      if (migrated) persist();
     },
     setTab(tab) { if (['assistant', 'trips', 'favorites', 'profile'].includes(tab)) update({ tab }); },
     setAgent(agent) { if (!state.busy && AGENTS.some((a) => a.id === agent)) update({ agent, error: '', progress: [] }); },
@@ -175,6 +185,38 @@ export function createTravelStore(storage, options = {}) {
       const has = state.favorites.includes(id);
       update({ favorites: has ? state.favorites.filter((item) => item !== id) : [...state.favorites, id] }, true);
       toast(has ? '已移出收藏' : '已收藏，留给下一次出发');
+    },
+    toggleSavedPlace(place, city = '') {
+      const clean = cleanSavedPlace(place, city);
+      const previous = state.savedPlaces.find((item) => samePlace(item, clean));
+      if (previous) {
+        update({ savedPlaces: state.savedPlaces.filter((item) => item.id !== previous.id) }, true); toast('已取消地点收藏');
+      } else {
+        if (state.savedPlaces.length >= 200) throw new Error('最多收藏200个地点，请先整理收藏');
+        update({ savedPlaces: [{ ...clean, id: uid(), savedAt: Date.now() }, ...state.savedPlaces] }, true); toast('地点已收藏');
+      }
+    },
+    removeSavedPlace(id) { update({ savedPlaces: state.savedPlaces.filter((item) => item.id !== id) }, true); toast('已移除收藏地点'); },
+    addSavedPlaceToTrip(placeId, tripId, day) {
+      const place = state.savedPlaces.find((item) => item.id === placeId), trip = state.trips.find((item) => item.id === tripId);
+      if (!place || !trip || !Number.isInteger(day) || !trip.days[day]) throw new Error('请选择有效的收藏地点、行程和天数');
+      if (trip.sample) throw new Error('请先创建自己的行程，再加入收藏地点');
+      if (trip.days[day].some((item) => samePlace(item.place, place))) { update({ focusTripId: tripId, activeDay: day }); toast('当天已有这个地点'); return; }
+      if (trip.days[day].length >= 50) throw new Error('当天最多保存50项安排');
+      const days = trip.days.map((items) => items.slice());
+      days[day].push({ title: place.name, time: '时间待定', detail: place.address, icon: 'compass-outline', place: cleanSavedPlace(place, place.city) });
+      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days } : item), focusTripId: tripId, activeDay: day }, true);
+      toast('已加入行程');
+    },
+    saveTripDetails(tripId, value) {
+      const trip = state.trips.find((item) => item.id === tripId);
+      if (!trip) throw new Error('行程不存在');
+      const clean = validateTripDetails(value, trip.days.length);
+      const changedCity = clean.destination !== trip.destination;
+      const days = changedCity ? trip.days.map((items) => items.map(({ place, ...item }) => item)) : trip.days;
+      const destinationId = DESTINATIONS.find((item) => item.name === clean.destination)?.id || null;
+      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, ...clean, destinationId, days } : item) }, true);
+      toast(changedCity ? '已保存，更换目的地后请重新确认地点' : '行程信息已保存');
     },
     savePreferences(value) { update({ preferences: validatePreferences(value), preferencesConfirmed: true }, true); toast('旅行偏好已保存'); },
     setConnection(value) {

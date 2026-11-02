@@ -62,6 +62,7 @@ test('微信本地存储与共用业务逻辑可以恢复收藏和行程草稿',
   const platform = storageFixture();
   const store = createTravelStore(createMiniStorage(platform), options({ request() { throw new Error('示例模式不应联网'); } }));
   t.after(() => store.dispose()); await store.hydrate();
+  store.setConnection({ ...store.getState().connection, mode: 'demo' });
   store.toggleFavorite('tokyo');
   store.createTrip({ ...store.getState().preferences, destination: '东京', travelers: 3 });
   await store.sendMessage('去东京'); await store.flush();
@@ -79,7 +80,8 @@ test('在没有 fetch、URL、AbortController 的小程序环境中可运行示�
   const create = vm.runInContext(`${source}\ncreateTravelStore`, sandbox);
   const calls = []; const platform = { ...storageFixture(), request() { throw new Error('不应调用旧接口'); } };
   const store = create(createMiniStorage(platform), { ...options(platform), stream: async (input) => { calls.push(input); return { response: '测试服务回复', thread_id: 'wechat-thread' }; } });
-  t.after(() => store.dispose()); await store.hydrate(); await store.sendMessage('想去京都');
+  t.after(() => store.dispose()); await store.hydrate();
+  store.setConnection({ ...store.getState().connection, mode: 'demo' }); await store.sendMessage('想去京都');
   assert.equal(calls.length, 0); store.setConnection({ mode: 'live', apiUrl: 'https://travel.example' });
   store.setAgent('flights'); await store.sendMessage('查询机票'); await store.sendMessage('再看看直飞');
   assert.equal(calls[0].query, '查询机票'); assert.equal(calls[1].threadId, 'wechat-thread'); assert.equal(store.getState().messages.at(-1).content, '测试服务回复');

@@ -5,6 +5,7 @@ import type { Activity, State } from './domain/travel.mjs';
 import type { MapPlace } from './domain/map-data.mjs';
 import { validPlace } from './domain/map-data.mjs';
 import type { MapResolution, RouteLeg } from './services/chat-client.mjs';
+import { SavedPlaceButton } from './saved-place-button';
 import { createMiniController } from './services/wechat.mjs';
 import { chatClient, store } from './stores/travel';
 
@@ -164,7 +165,7 @@ export function ItineraryMap({ state, kind, id, days, destination, onClose, samp
       {activity.groupTitle && <Text className='note'>同一时段：{activity.groupTitle}</Text>}
       {activity.alternatives?.length && !chosen[index] && !excluded.includes(index) ? <View><Text className='note'>请从以下安排中选择一项，再核对具体地点。</Text>{activity.alternatives.map((name) => <Button key={name} className='map-candidate' disabled={searching || !allowed} onClick={() => { setOptions((previous) => ({ ...previous, [index]: name })); void search(false, { index, query: name }); }}>{name}</Button>)}</View> : null}
       {chosen[index] && !excluded.includes(index) ? <><Text>{chosen[index]!.address || '地址未提供'}</Text><Text className='muted'>来源：{chosen[index]!.source} · {chosen[index]!.retrieved_at}</Text>
-        <Button className='text-button' onClick={() => open(chosen[index]!)}>打开位置</Button><Button className='text-button' onClick={() => setChosen((previous) => previous.map((place, i) => i === index ? null : place))}>重新选择地点</Button></> : !excluded.includes(index) && <>
+        <Button className='text-button' onClick={() => open(chosen[index]!)}>打开位置</Button><SavedPlaceButton place={chosen[index]!} city={chosen[index]!.city || destination || city} state={state} /><Button className='text-button' onClick={() => setChosen((previous) => previous.map((place, i) => i === index ? null : place))}>重新选择地点</Button></> : !excluded.includes(index) && <>
         {results[index]?.failure && <Text className='form-error'>{results[index].failure!.message}</Text>}
         {results[index] && !results[index].failure && !results[index].places.length && <Text className='note'>未查到地点，请在行程中修改名称后重试。</Text>}
         {results[index]?.places.map((place, candidate) => <Button className='map-candidate' key={candidate} onClick={() => bind(index, place)}><Text>{place.name}</Text><Text>{place.address || '地址未提供'}</Text></Button>)}

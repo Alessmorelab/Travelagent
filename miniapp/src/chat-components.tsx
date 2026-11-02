@@ -16,7 +16,7 @@ const factLabels: Record<string, string> = { price: '费用', distance: '距离'
 export function QuerySources({ sources, available, onClose }: { sources: QuerySource[]; available: boolean; onClose(): void }) {
   const [expanded, setExpanded] = useState<string[]>([]);
   return <Sheet title='查询依据' onClose={onClose}>
-    <Text className='sheet-description'>编号对应回复中的 [E1] 等标记。这里展示本次查询实际返回的字段；查询成功不代表整段回答的每个描述都已核实。</Text>
+    <Text className='sheet-description'>编号对应回复中的 [E1] 等标记。这里展示生成回复时的查询字段，编辑行程不会刷新这些记录；查询成功不代表每个描述都已核实。</Text>
     {!sources.length && <Text className='note'>{available ? '本条回复没有可展示的查询依据。' : '这条历史回复未保存查询依据，不能事后认定其中的数字已经核实。可重新发起查询获取依据。'}</Text>}
     {sources.map((source) => <View className='query-source' key={source.id}>
       <Text className='query-source-title'>[{source.id}] {source.label}</Text>

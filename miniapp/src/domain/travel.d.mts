@@ -1,3 +1,5 @@
+import type { SavedPlace } from './saved-places.mjs';
+import type { TripDetails } from './trip-details.mjs';
 import type { MapPlace, Itinerary } from './map-data.mjs';
 import type { QuerySource } from './query-sources.mjs';
 export type Tab = 'assistant' | 'trips' | 'favorites' | 'profile';
@@ -6,12 +8,12 @@ export type Preferences = { origin: string; destination: string; startDate: stri
 export type Connection = { mode: 'demo' | 'live'; apiUrl: string };
 export type Destination = { id: string; name: string; country: string; category: string; tag: string; days: string; budget: number; image: string; color: string; subtitle: string; description: string };
 export type Activity = { time: string; title: string; detail: string; icon: string; place?: MapPlace; alternatives?: string[]; groupTitle?: string };
-export type Trip = { id: string; title: string; destination: string; destinationId: string | null; startDate: string; endDate: string; travelers: number; budget: number; sample: boolean; days: Activity[][]; completed: string[]; source?: 'assistant'; notes?: string; sourceText?: string; sources?: QuerySource[] };
+export type Trip = { id: string; title: string; destination: string; destinationId: string | null; startDate: string; endDate: string; travelers: number; budget: number; sample: boolean; days: Activity[][]; completed: string[]; source?: 'assistant'; notes?: string; sourceText?: string; userNotes?: string; sources?: QuerySource[] };
 export type Message = { id: string; role: 'user' | 'assistant'; content: string; agent: Agent; mode: 'demo' | 'live'; status?: 'streaming' | 'interrupted' | 'complete'; progress?: Progress[]; itinerary?: Itinerary | null; warnings?: QueryWarning[]; sources?: QuerySource[] };
 export type QueryWarning = { kind: string; message: string; retryable: boolean; stage: string; label: string };
 export type Progress = { key: string; label: string; state: 'running' | 'complete' | 'interrupted'; kind?: 'task' | 'tool' };
 export type ChatSnapshot = { id: string; title: string; agent: Agent; mode: 'demo' | 'live'; apiUrl?: string; messages: Message[]; thread_id?: string; updated: number };
-export type State = { tab: Tab; agent: Agent; filter: string; activeDay: number; focusTripId?: string; busy: boolean; connectionStatus?: string; mapTarget?: { kind: 'trip' | 'message'; id: string } | null; error: string; toast: string; hydrated: boolean; connection: Connection; preferences: Preferences; preferencesConfirmed: boolean; favorites: string[]; trips: Trip[]; messages: Message[]; threads: Partial<Record<Agent, string>>; lastQuery?: string; lastRequestId?: string; progress: Progress[]; chatHistory: ChatSnapshot[]; activeChats: Partial<Record<Agent, string>> };
+export type State = { tab: Tab; agent: Agent; filter: string; activeDay: number; focusTripId?: string; busy: boolean; connectionStatus?: string; mapTarget?: { kind: 'trip' | 'message'; id: string } | null; error: string; toast: string; hydrated: boolean; connection: Connection; preferences: Preferences; preferencesConfirmed: boolean; favorites: string[]; savedPlaces: SavedPlace[]; trips: Trip[]; messages: Message[]; threads: Partial<Record<Agent, string>>; lastQuery?: string; lastRequestId?: string; progress: Progress[]; chatHistory: ChatSnapshot[]; activeChats: Partial<Record<Agent, string>> };
 export const STORAGE_KEY: string;
 export const AGENTS: { id: Agent; label: string; icon: string }[];
 export const DESTINATIONS: Destination[];
@@ -29,6 +31,9 @@ export type StreamTransport = (input: StreamInput, onEvent: (event: any) => void
 export function createTravelStore(storage: { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<unknown> }, options?: { apiUrl?: string; fetch?: TravelFetch; createAbortController?: () => TravelController; validateConnection?: (value: Connection) => Connection; stream?: StreamTransport; demoStreaming?: boolean; demoDelay?: number; timeout?: number }): {
   getState(): State; subscribe(listener: (state: State) => void): () => void; hydrate(): Promise<void>;
   setTab(tab: Tab): void; setAgent(agent: Agent): void; setFilter(filter: string): void; setActiveDay(day: number): void;
+  toggleSavedPlace(place: MapPlace, city?: string): void; removeSavedPlace(id: string): void;
+  addSavedPlaceToTrip(placeId: string, tripId: string, day: number): void;
+  saveTripDetails(tripId: string, value: TripDetails): void;
   toggleFavorite(id: string): void; savePreferences(value: Preferences): void; setConnection(value: Connection): void;
   testConnection(apiUrl: string): Promise<string>; sendMessage(text: string, retry?: boolean | 'regenerate'): Promise<void>;
   cancelMessage(): void; clearChat(): void; createTrip(value: Preferences): void; toggleActivity(id: string, key: string): void;

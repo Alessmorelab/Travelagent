@@ -35,7 +35,7 @@ npm run build:weapp
 
 微信开发者工具导入 `miniapp`，入口配置为 `dist/`；该入口默认游客 AppID，手机预览需换成自己的 AppID。已经导入仓库根目录 `travel_agent` 的，可继续使用根目录项目配置，它指向 `miniapp/dist/`，沿用你填写的 AppID。
 
-默认「灵感预览」无需模型密钥或后端，可测试四页面、逐步显示的示例聊天、历史记录和本地数据。内容有明确示例标记。
+默认进入「真实服务」，电脑模拟器直接连接 `http://127.0.0.1:8000`，发送消息即通过后端调用已配置的模型，无需先进入设置。也可在「我的 → 旅行服务」主动切换到带明确标记的示例模式。
 
 ## 运行聊天后端
 
@@ -44,10 +44,12 @@ npm run build:weapp
 ```sh
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements-miniapp.txt
-.venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+.venv/bin/python -m backend.app
 ```
 
 首次使用时将 `.env.chat.example` 复制为 `.env` 并填写自己的配置；已有 `.env` 时合并所需配置，保留原密钥。
+
+启动入口默认监听 `0.0.0.0:8000`，沿用原来的端口。需要调整时使用 `--host`、`--port` 参数；原 Uvicorn 启动命令仍可使用。
 
 - 大模型：配置 `TRAVEL_API_KEY` 或 `DASHSCOPE_API_KEY`，模型默认 `qwen-plus`。可用 `TRAVEL_API_BASE` 指定兼容服务。使用 Together 时移除该 base 并按模板配置。
 - 百度地图：填写**服务端类型** `BAIDU_MAP_AK`。`BAIDU_MAP_TRANSPORT=mcp` 使用百度托管的 Streamable HTTP，后端发现工具后加入 LangGraph；`webapi` 切回原来的直接 API 工具。未设置 transport 的旧配置继续使用 Web API。MCP 只传 AK；`BAIDU_MAP_SK` 仅用于直接 Web API 的 SN 校验。地点信息不能代替房态或实时预订报价。
@@ -65,7 +67,7 @@ docker compose up -d postgres
 
 容器的用户、数据库名默认都是 `roam`，端口只绑定电脑 `127.0.0.1:5432`。将 `DATABASE_URL` 指向该数据库即可。数据保存在 Docker 命名卷中；修改初始密码变量不会修改已初始化数据库的密码。切换数据库不会自动搬迁已有 SQLite 会话。
 
-小程序「我的 → 旅行服务」填写后端地址，测试连接并保存真实服务模式。正式环境配置 HTTPS、WSS 及微信合法域名。手机上的 `localhost` 指手机自己，不能用来访问电脑后端。
+小程序默认直接连接本机后端；旧版的默认示例模式和占位地址会自动升级，已配置的真实服务地址、行程、收藏与历史仍保留。更换后端时在「我的 → 旅行服务」修改地址。正式环境配置 HTTPS、WSS 及微信合法域名。手机上的 `127.0.0.1` 或 `localhost` 指手机自己，真机测试需改为电脑局域网地址或可访问的 HTTPS 服务。
 
 「行程 → 地点地图」可按城市和关键词查询并显示地点。该入口由后端调用百度地点检索 Web API 和官方坐标转换 API，将 BD-09 转换为微信地图使用的 GCJ-02；转换失败时不显示未经转换的坐标。服务端 AK 需要开通这两项服务，使用 SN 校验时还需配置 SK。该入口独立于 MCP。AI 回复和已保存行程另支持按天地图、同名地点确认、步行/驾车/公交路线与分段重试；路线也需要开通对应 Web API 权限。
 
@@ -130,3 +132,6 @@ npm run check:runtime
 百度地图鉴权排查：220 表示 Referer 校验失败，后端应新建服务端类型 AK；210 表示服务器出口 IP 未通过应用白名单校验；211 表示 SN 校验失败，检查 SK；240 表示尚未启用对应 API。日志和公开工具错误不会显示带 AK 的请求 URL。
 
 当前身份按小程序安装隔离，尚未接入微信账号登录或跨设备同步。百度 MCP 已接入后端工具目录，业务查询仍取决于应用权限、服务开通与网络。地点地图支持手动检索、按天行程地点和真实路线；路线失败时保留地点与成功路段。高铁余票、语音尚未接入。手机微信效果需要独立验证；自动化页面挂载不能替代真机检查。
+
+
+行程日常使用：支持编辑已保存行程的日期、人数、计划预算与备注；实际查询地点可收藏并加入指定一天，也可复制当前行程分享。详见[行程信息与地点收藏](docs/trip-and-place-workflows.md)。

@@ -1,5 +1,5 @@
 import type { Activity, Message } from './travel.mjs';
-export type MapPlace = { name: string; address: string; latitude: number; longitude: number; coordinate_system: 'gcj02'; source: string; retrieved_at: string; uid?: string };
+export type MapPlace = { name: string; address: string; latitude: number; longitude: number; coordinate_system: 'gcj02'; source: string; retrieved_at: string; uid?: string; city?: string };
 export type Itinerary = { schema_version: 1; destination: string; notes: string; days: Activity[][]; sourceText?: string };
 export function validPoint(value: any): boolean;
 export function validPlace(value: any): value is MapPlace;

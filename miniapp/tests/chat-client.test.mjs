@@ -133,6 +133,7 @@ test('示例对话可以流式显示、归档、恢复，开启新对话不删�
   const f = fixture();
   const store = createTravelStore(f.storage, { demoDelay: 0, demoStreaming: true });
   t.after(() => store.dispose()); await store.hydrate();
+  store.setConnection({ ...store.getState().connection, mode: 'demo' });
   let partial = false;
   store.subscribe((state) => { if (state.busy && state.messages.at(-1)?.content) partial = true; });
   await store.sendMessage('规划京都');
@@ -193,6 +194,7 @@ test('从专业助手开启统一新对话时保留原有示例历史', async (t
   const f = fixture();
   const store = createTravelStore(f.storage, { demoDelay: 0 });
   t.after(() => store.dispose()); await store.hydrate();
+  store.setConnection({ ...store.getState().connection, mode: 'demo' });
   await store.sendMessage('整趟行程');
   store.setAgent('hotels'); await store.sendMessage('附近住哪里');
   store.newConversation('team');

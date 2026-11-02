@@ -65,7 +65,7 @@ export function createChatClient({ fetch, storage, connectSocket, reconnectDelay
       return data.results.map((item, index) => {
         if (item.query !== queries[index]) throw new Error('地点查询返回顺序异常');
         if (item.failure) return { query: item.query, places: [], failure: item.failure };
-        return { ...item, places: normalizedPlaces(item) };
+        return { ...item, places: normalizedPlaces(item).map((place) => ({ ...place, city })) };
       });
     },
     async routeDay(apiUrl, stops, mode, segments, signal) {

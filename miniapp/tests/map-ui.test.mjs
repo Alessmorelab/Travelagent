@@ -62,6 +62,7 @@ test('地图按天查询，同名地点需选择，实际路径与失败路段�
     if (name === '@tarojs/taro') return { openLocation: async () => {} };
     if (name === './domain/map-data.mjs') return { validPlace };
     if (name === './services/wechat.mjs') return { createMiniController };
+    if (name === './saved-place-button') return { SavedPlaceButton: () => null };
     if (name === './stores/travel') return { chatClient: client, store: { bindMapPlace(...args) { bindings.push(args); } } };
     return require(name);
   }, compiled, compiled.exports);

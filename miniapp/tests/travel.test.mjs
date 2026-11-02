@@ -15,6 +15,7 @@ async function fixture(options = {}) {
 
 test('收藏、偏好、行程完成进度与对话在重新打开后恢复', async (t) => {
   const { store, storage } = await fixture(); t.after(() => store.dispose());
+  store.setConnection({ ...store.getState().connection, mode: 'demo' });
   store.toggleFavorite('coast');
   store.savePreferences({ ...store.getState().preferences, origin: '上海', travelers: 3 });
   store.createTrip({ ...store.getState().preferences, destination: '东京', startDate: '2026-12-01', endDate: '2026-12-03' });
@@ -101,7 +102,7 @@ test('日期、人数、预算与地址在提交前验证', () => {
 test('损坏的本地记录恢复为可用状态，不导致启动崩溃', async (t) => {
   const storage = memoryStorage(); await storage.setItem(STORAGE_KEY, '{broken');
   const store = createTravelStore(storage); t.after(() => store.dispose()); await store.hydrate();
-  assert.equal(store.getState().hydrated, true); assert.equal(store.getState().connection.mode, 'demo');
+  assert.equal(store.getState().hydrated, true); assert.equal(store.getState().connection.mode, 'live');
   assert.match(store.getState().toast, /初始体验/);
 });
 

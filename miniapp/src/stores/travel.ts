@@ -10,7 +10,6 @@ const fetch = createMiniFetch({ request: (options) => Taro.request(options) });
 export const chatClient = createChatClient({ storage, fetch, connectSocket: (options) => Taro.connectSocket(options) });
 
 export const store = createTravelStore(storage, {
-  apiUrl: 'https://api.example.com',
   fetch,
   stream: chatClient.stream,
   demoStreaming: true,
