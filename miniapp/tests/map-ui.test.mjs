@@ -5,6 +5,8 @@ import { createRequire } from 'node:module';
 import React from 'react';
 import { validPlace } from '../src/domain/map-data.mjs';
 import { createMiniController } from '../src/services/wechat.mjs';
+import * as adjustment from '../src/domain/day-adjustment.mjs';
+import { createTravelStore } from '../src/domain/travel.mjs';
 
 const require = createRequire(import.meta.url);
 const reconcile = require('react-reconciler');
@@ -104,4 +106,64 @@ test('地图按天查询，同名地点需选择，实际路径与失败路段�
   assert.equal(map.props.markers.length, 1);
   assert.equal(map.props.polyline.length, 0, 'Day 1 geometry cannot survive switching to Day 2');
   assert.equal(routes.at(-1).segments.length, 1);
+});
+
+test('局部调整界面保护预约，确认地点后比较真实路段接口，并只在确认时保存', async (t) => {
+  const store = createTravelStore({ async getItem() { return null; }, async setItem() {} });
+  t.after(() => store.dispose()); await store.hydrate();
+  const id = store.saveAssistantTrip({ role: 'assistant', mode: 'live', status: 'complete', content: '### Day 1\n**上午｜博物馆**\n已预约\n**下午｜公园**\n散步' }, '武汉');
+  store.setActivityLocked(id, 0, 0, true);
+  const place = (name, longitude) => ({ name, address: '测试地址', city: '武汉', latitude: 30.5, longitude, coordinate_system: 'gcj02', source: 'fixture', retrieved_at: 'test' });
+  store.bindMapPlace('trip', id, 0, 0, '博物馆', place('博物馆', 114.3));
+  store.bindMapPlace('trip', id, 0, 1, '公园', place('公园', 114.4));
+  const before = store.getState().trips[0], routes = [];
+  const client = {
+    async adjustDay(_url, request) {
+      assert.deepEqual(request.targets, [1]); assert.equal(request.activities[0].protected, true);
+      return [{ index: 1, title: '科技馆', time: '下午', detail: '室内展览' }];
+    },
+    async resolvePlaces() { return [{ query: '科技馆', places: [place('科技馆', 114.35)] }]; },
+    async routeDay(_url, stops, mode) {
+      routes.push({ stops, mode });
+      return [{ index: 0, source: 'fixture', retrieved_at: 'test', duration_seconds: stops[1].name === '公园' ? 1800 : 600 }];
+    }
+  };
+  const { code } = transformSync(readFileSync(new URL('../src/day-adjustment-sheet.tsx', import.meta.url), 'utf8'), {
+    filename: 'day-adjustment-sheet.tsx', babelrc: false, configFile: false,
+    presets: [[require.resolve('@babel/preset-react'), { runtime: 'automatic' }], require.resolve('@babel/preset-typescript')],
+    plugins: [require.resolve('@babel/plugin-transform-modules-commonjs')]
+  });
+  const compiled = { exports: {} };
+  new Function('require', 'module', 'exports', code)((name) => {
+    if (name === '@tarojs/components') return { Button: 'button', Picker: 'picker', Text: 'text', Textarea: 'textarea', View: 'view' };
+    if (name === './components') return { Sheet: ({ children }) => React.createElement('sheet', {}, children) };
+    if (name === './domain/day-adjustment.mjs') return adjustment;
+    if (name === './services/wechat.mjs') return { createMiniController };
+    if (name === './stores/travel') return { chatClient: client, store };
+    return require(name);
+  }, compiled, compiled.exports);
+  const container = { children: [] }, root = renderer.createContainer(container, 0, null, false, null, '', console.error, null);
+  let closed = false;
+  renderer.updateContainer(React.createElement(compiled.exports.DayAdjustmentSheet, {
+    trip: before, day: 0, connection: { mode: 'live', apiUrl: 'https://fixture.example' }, onClose() { closed = true; }
+  }), root, null);
+  t.after(() => { renderer.updateContainer(null, root, null); renderer.flushPassiveEffects(); });
+  const button = (label) => flatten(container).find((node) => node.type === 'button' && textOf(node).includes(label));
+  await settle();
+  assert.equal(button('博物馆').props.disabled, true);
+  button('公园').props.onClick();
+  flatten(container).find((node) => node.type === 'textarea').props.onInput({ detail: { value: '换成室内' } });
+  button('生成改动预览').props.onClick(); await settle();
+  assert.equal(store.getState().trips[0], before);
+  assert.match(textOf(container), /交通耗时暂未估算/);
+  button('查询新地点').props.onClick(); await settle();
+  button('科技馆测试地址').props.onClick();
+  button('查询步行耗时对比').props.onClick(); await settle();
+  assert.deepEqual(routes.map(({ stops }) => stops.map(({ name }) => name)), [['博物馆', '公园'], ['博物馆', '科技馆']]);
+  assert.match(textOf(container), /约 30 分钟.*约 10 分钟/);
+  assert.equal(store.getState().trips[0], before);
+  button('确认保存').props.onClick();
+  assert.equal(closed, true);
+  assert.equal(store.getState().trips[0].days[0][1].place.name, '科技馆');
+  assert.equal(store.getState().trips[0].days[0][0], before.days[0][0]);
 });

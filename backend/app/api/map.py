@@ -7,19 +7,11 @@ from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field, field_validator
 from pydantic import ConfigDict
 
-from backend.app.core.errors import ChatError
+from backend.app.api.identity import authenticated
 from backend.app.core.failures import failure_for, stage_call
 from backend.app.services.baidu_maps import BaiduMaps
-from backend.app.services.chat import get_chat_service
 
 router = APIRouter()
-
-
-async def authenticated(authorization):
-    try:
-        return await asyncio.to_thread(get_chat_service().authenticate, authorization.removeprefix('Bearer '))
-    except ChatError as error:
-        raise HTTPException(error.code, str(error)) from error
 
 
 class ResolvePlaces(BaseModel):

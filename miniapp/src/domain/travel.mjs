@@ -3,6 +3,7 @@ import { validateTripDetails } from './trip-details.mjs';
 import { readSources } from './query-sources.mjs';
 import { expandActivities, expandTrip } from './activity-slots.mjs';
 import { itineraryForMessage, readItinerary, validPlace } from './map-data.mjs';
+import { dayRevision, previewDayAdjustment, remapDayCompletion } from './day-adjustment.mjs';
 
 export const STORAGE_KEY = 'roam.travel.v1';
 export const AGENTS = [
@@ -95,6 +96,7 @@ export function createTravelStore(storage, options = {}) {
   let state = initialState(options.apiUrl);
   const listeners = new Set();
   let pending = null;
+  let lastAdjustment = null;
   let toastTimer;
   let writeQueue = Promise.resolve();
   const fetcher = options.fetch || globalThis.fetch;
@@ -124,6 +126,10 @@ export function createTravelStore(storage, options = {}) {
     const current = currentChat();
     if (!current || current.mode === 'live') return state.chatHistory;
     return [...state.chatHistory.filter((item) => item.id !== current.id), current].slice(-10);
+  };
+  const canUndoDayAdjustment = (id, day) => {
+    const trip = state.trips.find((item) => item.id === id);
+    return !!trip && lastAdjustment?.id === id && lastAdjustment.day === day && lastAdjustment.after === dayRevision(trip, day);
   };
 
   return {
@@ -164,7 +170,7 @@ export function createTravelStore(storage, options = {}) {
             } catch { return false; }
           });
           for (let i = 0; i < trips.length; i++) trips[i] = { ...expandTrip(trips[i]), ...validateTripDetails(trips[i], trips[i].days.length), ...(Array.isArray(trips[i].sources) ? { sources: readSources(trips[i].sources) } : {}) };
-          for (const trip of trips) trip.days = trip.days.map((day) => day.map(({ place, ...item }) => ({ ...item, ...(validPlace(place) ? { place } : {}) })));
+          for (const trip of trips) trip.days = trip.days.map((day) => day.map(({ place, locked, ...item }) => ({ ...item, ...(validPlace(place) ? { place } : {}), ...(locked === true ? { locked } : {}) })));
           const messages = validMessages(saved.messages);
           const chatHistory = Array.isArray(saved.chatHistory) ? saved.chatHistory.filter((item) => item && typeof item.id === 'string' && typeof item.title === 'string' && item.mode === 'demo' && AGENTS.some((agent) => agent.id === item.agent)).map((item) => ({ ...item, messages: validMessages(item.messages).slice(-40) })).slice(-10) : [];
           update({ chatHistory, activeChats: saved.activeChats && typeof saved.activeChats === 'object' ? Object.fromEntries(Object.entries(saved.activeChats).filter(([key, value]) => AGENTS.some((agent) => agent.id === key) && typeof value === 'string')) : {} });
@@ -384,7 +390,8 @@ export function createTravelStore(storage, options = {}) {
       if (!trip || ![-1, 1].includes(direction) || !trip.days[day]?.[index] || !trip.days[day][target]) return;
       const days = trip.days.map((items) => items.slice());
       [days[day][index], days[day][target]] = [days[day][target], days[day][index]];
-      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed: item.completed.filter((key) => !key.startsWith(`${day}-`)) } : item) }, true);
+      const completed = remapDayCompletion(trip.completed, day, (i) => i === index ? target : i === target ? index : i);
+      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed } : item) }, true);
     },
     clearTripFocus() { update({ focusTripId: '' }); },
     editActivity(tripId, day, index, value) {
@@ -395,20 +402,51 @@ export function createTravelStore(storage, options = {}) {
       if (index === -1 && trip.days[day].length >= 50) throw new Error('当天最多保存50项安排');
       const days = trip.days.map((items) => items.slice());
       const previous = index >= 0 ? days[day][index] : null;
-      const activity = { title, time: time || '时间待定', detail, icon: previous?.icon || 'compass-outline', ...(previous?.title === title && validPlace(previous.place) ? { place: previous.place } : {}) };
-      if (index < 0) days[day].push(activity); else days[day][index] = activity;
-      days[day] = expandActivities(days[day]);
+      const activity = { title, time: time || '时间待定', detail, icon: previous?.icon || 'compass-outline', ...(previous?.locked === true ? { locked: true } : {}), ...(previous?.title === title && validPlace(previous.place) ? { place: previous.place } : {}) };
+      const expanded = expandActivities([activity]);
+      if (index < 0) days[day].push(...expanded); else days[day].splice(index, 1, ...expanded);
       if (days[day].length > 50) throw new Error('拆分后当天安排超过50项，请减少地点');
-      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed: item.completed.filter((key) => !key.startsWith(`${day}-`)) } : item) }, true);
+      const completed = index < 0 ? trip.completed : remapDayCompletion(trip.completed, day,
+        (i) => i === index ? (previous.title === title ? i : null) : i > index ? i + expanded.length - 1 : i);
+      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed } : item) }, true);
       toast('行程安排已保存');
     },
     removeActivity(tripId, day, index) {
       const trip = state.trips.find((item) => item.id === tripId);
       if (!trip || !Number.isInteger(day) || !Number.isInteger(index) || !trip.days[day] || !trip.days[day][index]) return;
       const days = trip.days.map((items) => items.slice()); days[day].splice(index, 1);
-      const completed = trip.completed.filter((key) => !key.startsWith(`${day}-`));
+      const completed = remapDayCompletion(trip.completed, day, (i) => i === index ? null : i > index ? i - 1 : i);
       update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed } : item) }, true);
       toast('已删除该安排');
+    },
+    setActivityLocked(tripId, day, index, locked) {
+      const trip = state.trips.find((item) => item.id === tripId);
+      const activity = trip?.days[day]?.[index];
+      if (!activity) return;
+      const { locked: _previous, ...fields } = activity;
+      const days = trip.days.slice(); days[day] = days[day].slice();
+      days[day][index] = { ...fields, ...(locked === true ? { locked: true } : {}) };
+      update({ trips: state.trips.map((item) => item.id === tripId ? { ...trip, days } : item) }, true);
+    },
+    applyDayAdjustment(id, day, revision, targets, changes, places) {
+      const trip = state.trips.find((item) => item.id === id);
+      if (!trip || dayRevision(trip, day) !== revision) throw new Error('当天安排已修改，请重新生成建议');
+      if (!changes.length) throw new Error('没有可保存的改动');
+      const days = trip.days.slice();
+      days[day] = previewDayAdjustment(trip, day, targets, changes, places);
+      const next = { ...trip, days };
+      lastAdjustment = { id, day, before: trip.days[day], after: dayRevision(next, day) };
+      update({ trips: state.trips.map((item) => item.id === id ? next : item) }, true);
+      toast(`第${day + 1}天已更新，可撤销本次调整`);
+    },
+    canUndoDayAdjustment,
+    undoDayAdjustment(id, day) {
+      if (!canUndoDayAdjustment(id, day)) throw new Error('当天安排已修改，不能直接撤销');
+      const trip = state.trips.find((item) => item.id === id);
+      const days = trip.days.slice(); days[day] = lastAdjustment.before;
+      lastAdjustment = null;
+      update({ trips: state.trips.map((item) => item.id === id ? { ...trip, days } : item) }, true);
+      toast('已撤销本次调整');
     },
     toggleActivity(tripId, key) {
       update({ trips: state.trips.map((trip) => trip.id === tripId ? { ...trip, completed: trip.completed.includes(key) ? trip.completed.filter((item) => item !== key) : [...trip.completed, key] } : trip) }, true);

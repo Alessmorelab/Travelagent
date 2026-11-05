@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from backend.app.core.config import settings
 from backend.app.api.chat import create_chat_router
 from backend.app.api.map import router as map_router
+from backend.app.api.trips import router as trips_router
 from backend.app.services.chat import get_chat_service
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -36,6 +37,7 @@ app.add_middleware(
 
 app.include_router(create_chat_router(), prefix=f"{settings.API_V1_STR}/chat", tags=["Chat"])
 app.include_router(map_router, prefix=f"{settings.API_V1_STR}/map", tags=["Map"])
+app.include_router(trips_router, prefix=f"{settings.API_V1_STR}/trips", tags=["Trips"])
 
 @app.get("/")
 def root():

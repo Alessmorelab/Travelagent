@@ -327,3 +327,8 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .saved-place-card > .saved-place-title { font-size: 30px; font-weight: 600; }
 .saved-place-card > .muted { font-size: 21px; }
 .saved-place-actions { display: flex; flex-wrap: wrap; gap: 26px; }
+.adjust-slot, .adjust-card { padding: 22px; margin: 16px 0; text-align: left; border: 1px solid $line; border-radius: 16px; background: $white; }
+.adjust-slot.active { border-color: $ink; background: $sage; }
+.adjust-slot > text, .adjust-card > text { display: block; font-size: 25px; line-height: 1.7; overflow-wrap: anywhere; }
+.adjust-slot > text:last-child, .adjust-card > .muted { color: $muted; font-size: 21px; }
+.adjust-card > .adjust-new { color: $ink; font-weight: 600; margin-top: 18px; }

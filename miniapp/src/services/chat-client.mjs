@@ -1,4 +1,5 @@
 import { validPoint } from '../domain/map-data.mjs';
+import { readDayChanges } from '../domain/day-adjustment.mjs';
 const CREDENTIAL_KEY = 'roam.chat.credentials.v1';
 const abortError = () => { const error = new Error('Request aborted'); error.name = 'AbortError'; return error; };
 
@@ -35,17 +36,18 @@ export function createChatClient({ fetch, storage, connectSocket, reconnectDelay
     }
     return data;
   };
-  const mapRequest = async (apiUrl, path, body, signal) => {
+  const post = async (apiUrl, path, body, signal, fallback) => {
     const token = await tokenFor(apiUrl);
-    const response = await fetch(`${apiUrl}/api/v1/map/${path}`, { method: 'POST', signal,
+    const response = await fetch(`${apiUrl}/api/v1/${path}`, { method: 'POST', signal,
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await response.json();
     if (!response.ok) {
       if (response.status === 401) await forgetToken(apiUrl);
-      throw new Error(typeof data.detail === 'string' ? data.detail : '地图查询失败，请重试');
+      throw new Error(typeof data.detail === 'string' ? data.detail : fallback);
     }
     return data;
   };
+  const mapRequest = (apiUrl, path, body, signal) => post(apiUrl, `map/${path}`, body, signal, '地图查询失败，请重试');
   const normalizedPlaces = (data) => {
     if (typeof data.source !== 'string' || !data.source || typeof data.retrieved_at !== 'string' || !data.retrieved_at || data.coordinate_system !== 'gcj02'
       || !Array.isArray(data.places) || data.places.length > 5 || data.places.some((place) => !validPoint(place) || typeof place.name !== 'string' || !place.name.trim() || place.name.length > 100 || typeof place.address !== 'string' || place.address.length > 200)) {
@@ -54,6 +56,10 @@ export function createChatClient({ fetch, storage, connectSocket, reconnectDelay
     return data.places.map((place) => ({ ...place, source: data.source, retrieved_at: data.retrieved_at, coordinate_system: 'gcj02' }));
   };
   return {
+    async adjustDay(apiUrl, request, signal) {
+      const data = await post(apiUrl, 'trips/adjust-day', request, signal, '无法生成改动，请检查后端版本或调整要求');
+      return readDayChanges(data?.changes, request.targets);
+    },
     async searchPlaces(apiUrl, city, query) {
       const data = await mapRequest(apiUrl, 'places', { city, query });
       normalizedPlaces(data);

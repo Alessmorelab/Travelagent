@@ -103,6 +103,7 @@ BAIDU_MAP_TRANSPORT=mcp
 | `POST /api/v1/map/places` | 查询地点并转换为小程序地图坐标 |
 | `POST /api/v1/map/resolve` | 批量查询当天地点，保留候选与部分错误 |
 | `POST /api/v1/map/routes` | 查询真实 GCJ-02 路径，可只重试指定路段 |
+| `POST /api/v1/trips/adjust-day` | 为选中的单日活动生成替换建议，由小程序预览后保存 |
 | `POST /api/v1/chat/requests/{id}/cancel` | 断线时仍可停止当前安装的请求 |
 
 历史接口使用 Bearer 凭证；WebSocket 首条 `start` 消息携带凭证。事件包括 `accepted/status/delta/final/artifact/done/error/cancelled` 和心跳。业务事件携带递增 `seq`；断线重连使用相同请求编号与 `after_seq` 补发遗漏事件，已完成结果从数据库回放。主动停止才取消任务；进程重启后的未完成任务会明确提示中断。部署当前使用单个 Uvicorn worker。详见[行程地图与异常恢复](docs/map-and-resilience.md)。
