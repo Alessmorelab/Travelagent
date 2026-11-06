@@ -94,7 +94,7 @@ export function DayAdjustmentSheet({ trip, day, connection, onClose }: { trip: T
       {preview.changes.map((change) => <View className='adjust-card' key={change.index}>
         <Text className='muted'>原安排 · {before[change.index].time}</Text><Text>{before[change.index].title}</Text>
         {!!before[change.index].detail && <Text className='muted'>{before[change.index].detail}</Text>}
-        <Text className='adjust-new'>建议 · {change.time}</Text><Text>{change.title}</Text><Text className='muted'>{change.detail}</Text>
+        <Text className='adjust-new'>建议 · {change.time}</Text><Text>{change.title}</Text><Text className='muted'>{after[change.index].detail}</Text>
         {change.title !== before[change.index].title && <>
           {places[change.index] && <Text className='note'>已确认：{places[change.index].name} · {places[change.index].address}</Text>}
           <Button className='text-button' disabled={!!working || stale} onClick={() => void lookup(change)}>查询新地点</Button>

@@ -79,6 +79,32 @@ test('预览或撤销不会覆盖同日之后的手动改动', async (t) => {
   assert.equal(trip().days[0][1].locked, true);
 });
 
+test('只调整活动时间时保留完整长备注，仍可保存明确改写的备注', async (t) => {
+  const { store, id, trip, storage } = await setup(t);
+  const detail = `${'预约说明。'.repeat(119)}     请携带身份证原件。`;
+  store.editActivity(id, 0, 1, { title: '测试公园', time: '下午', detail });
+
+  const original = trip();
+  const request = makeDayAdjustmentRequest(original, 0, [1], '只改到15:00');
+  const timeChange = { index: 1, title: '测试公园', time: '15:00', detail: request.activities[1].detail.trim() };
+  assert.ok(timeChange.detail.length < detail.length);
+  assert.equal(previewDayAdjustment(original, 0, [1], [timeChange])[1].detail, detail);
+  store.applyDayAdjustment(id, 0, dayRevision(original, 0), [1], [timeChange]);
+  assert.equal(trip().days[0][1].time, '15:00');
+  assert.equal(trip().days[0][1].detail, detail);
+
+  await store.flush();
+  const reopened = createTravelStore(storage);
+  t.after(() => reopened.dispose());
+  await reopened.hydrate();
+  assert.equal(reopened.getState().trips.find((item) => item.id === id).days[0][1].detail, detail);
+
+  const rewrite = { ...timeChange, detail: '从东门入园' };
+  assert.equal(previewDayAdjustment(trip(), 0, [1], [rewrite])[1].detail, rewrite.detail);
+  store.applyDayAdjustment(id, 0, dayRevision(trip(), 0), [1], [rewrite]);
+  assert.equal(trip().days[0][1].detail, rewrite.detail);
+});
+
 test('只比较新旧两侧均有实际坐标的受影响相邻路段', async (t) => {
   const { store, id, trip } = await setup(t);
   store.bindMapPlace('trip', id, 0, 0, '测试博物馆', place('测试博物馆', 30.4));

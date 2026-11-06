@@ -4,6 +4,7 @@ import { tripEndDate } from './trip-details.mjs';
 
 export const MAX_DAY_ACTIVITIES = 12;
 export const MAX_ADJUSTMENT_TARGETS = 4;
+const MAX_ADJUSTMENT_DETAIL_LENGTH = 600;
 
 export function isProtectedActivity(trip, day, index) {
   return trip.days[day]?.[index]?.locked === true || trip.completed.includes(`${day}-${index}`);
@@ -32,7 +33,7 @@ export function makeDayAdjustmentRequest(trip, day, targets, instruction) {
   if (!request || request.length > 600) throw new Error('请填写调整要求，最多600字');
   return { destination: trip.destination, day: day + 1, date: tripEndDate(trip.startDate, day + 1) || null,
     instruction: request, targets: [...targets], activities: activities.map((item, index) => ({ title: item.title,
-      time: item.time || '时间待定', detail: item.detail.slice(0, 600), protected: isProtectedActivity(trip, day, index) })) };
+      time: item.time || '时间待定', detail: item.detail.slice(0, MAX_ADJUSTMENT_DETAIL_LENGTH), protected: isProtectedActivity(trip, day, index) })) };
 }
 
 export function readDayChanges(value, targets) {
@@ -41,7 +42,7 @@ export function readDayChanges(value, targets) {
   return value.map((item) => {
     const { index, title, time, detail } = item || {};
     if (!Number.isInteger(index) || !targets.includes(index) || seen.has(index) || typeof title !== 'string' || !title.trim() || title.length > 100
-        || typeof time !== 'string' || !time.trim() || time.length > 40 || typeof detail !== 'string' || detail.length > 600) {
+        || typeof time !== 'string' || !time.trim() || time.length > 40 || typeof detail !== 'string' || detail.length > MAX_ADJUSTMENT_DETAIL_LENGTH) {
       throw new Error('改动结果超出选择范围或格式无效，请重新生成');
     }
     seen.add(index);
@@ -55,7 +56,12 @@ export function previewDayAdjustment(trip, day, targets, changes, places = {}) {
   return activities.map((activity, index) => {
     const replacement = replacements.get(index);
     if (!replacement) return activity;
-    if (replacement.title === activity.title) return { ...activity, ...replacement };
+    if (replacement.title === activity.title) {
+      // 模型原样返回发送给它的备注时，保留本地完整内容。
+      const sentDetail = activity.detail.slice(0, MAX_ADJUSTMENT_DETAIL_LENGTH).trim();
+      const detail = replacement.detail === sentDetail ? activity.detail : replacement.detail;
+      return { ...activity, ...replacement, detail };
+    }
     if (titleParts(replacement.title).parts.length !== 1) throw new Error('一项改动只能替换一个活动');
     const place = places[index];
     // 模型只提供文字；换地点时，旧绑定失效，只有用户在候选列表确认后才绑定。
