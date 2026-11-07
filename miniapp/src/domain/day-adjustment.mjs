@@ -11,8 +11,35 @@ export function isProtectedActivity(trip, day, index) {
 }
 
 export function dayRevision(trip, day) {
-  return JSON.stringify([trip.id, trip.destination, trip.startDate, trip.days[day],
+  // 按固定字段比较，重新读取本地记录后的属性顺序不影响撤销判断。
+  const activities = trip.days[day]?.map((activity) => [
+    activity.title, activity.time, activity.detail, activity.icon, activity.locked === true,
+    activity.groupTitle, activity.alternatives,
+    activity.place ? [activity.place.name, activity.place.address, activity.place.city,
+      activity.place.latitude, activity.place.longitude, activity.place.coordinate_system,
+      activity.place.source, activity.place.retrieved_at] : null,
+  ]);
+  return JSON.stringify([trip.id, trip.destination, trip.startDate, activities,
     trip.completed.filter((key) => key.startsWith(`${day}-`)).sort()]);
+}
+
+export function readDayAdjustmentUndo(trip) {
+  const records = trip.adjustmentUndo;
+  if (!records || typeof records !== 'object' || Array.isArray(records)) return {};
+  return Object.fromEntries(Object.entries(records).filter(([key, record]) => {
+    const day = Number(key);
+    return Number.isInteger(day) && day >= 0 && String(day) === key && !!trip.days[day]
+      && record?.after === dayRevision(trip, day)
+      && Array.isArray(record.before) && record.before.length > 0 && record.before.length <= MAX_DAY_ACTIVITIES
+      && record.before.length === trip.days[day].length
+      && record.before.every((activity) => activity
+        && ['title', 'time', 'detail', 'icon'].every((field) => typeof activity[field] === 'string')
+        && (activity.place === undefined || validPlace(activity.place))
+        && (activity.locked === undefined || typeof activity.locked === 'boolean')
+        && (activity.groupTitle === undefined || typeof activity.groupTitle === 'string')
+        && (activity.alternatives === undefined || Array.isArray(activity.alternatives)
+          && activity.alternatives.every((title) => typeof title === 'string')));
+  }));
 }
 
 function checkTargets(trip, day, targets) {

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTravelStore } from '../src/domain/travel.mjs';
+import { createTravelStore, STORAGE_KEY } from '../src/domain/travel.mjs';
 import { comparableDayLegs, dayRevision, makeDayAdjustmentRequest, previewDayAdjustment } from '../src/domain/day-adjustment.mjs';
+import { formatTripText } from '../src/domain/trip-details.mjs';
 import { createChatClient } from '../src/services/chat-client.mjs';
 
 const answer = { role: 'assistant', mode: 'live', status: 'complete', content: '### Day 1 · 城市漫游\n**上午｜测试博物馆**\n已预约\n**下午｜测试公园**\n散步\n**晚上｜测试餐厅**\n晚餐\n### Day 2 · 返程\n**上午｜测试车站**\n乘车' };
@@ -77,6 +78,111 @@ test('预览或撤销不会覆盖同日之后的手动改动', async (t) => {
   assert.equal(store.canUndoDayAdjustment(id, 0), false);
   assert.throws(() => store.undoDayAdjustment(id, 0), /不能直接撤销/);
   assert.equal(trip().days[0][1].locked, true);
+});
+
+test('多份行程按天保留撤销记录，重启后可恢复长备注、锁定与地点，再次打开保留撤销结果', async (t) => {
+  const { store, id, trip, storage } = await setup(t);
+  store.setActivityLocked(id, 0, 0, true);
+  store.bindMapPlace('trip', id, 0, 0, '测试博物馆', place('测试博物馆', 30.4));
+  store.editActivity(id, 0, 1, { title: '测试公园', time: '下午', detail: '调整前的私人提醒。'.repeat(100) });
+  store.bindMapPlace('trip', id, 0, 1, '测试公园', place('测试公园', 30.5));
+  store.toggleActivity(id, '0-2');
+  const before = trip();
+  store.applyDayAdjustment(id, 0, dayRevision(trip(), 0), [1], [change]);
+  store.applyDayAdjustment(id, 1, dayRevision(trip(), 1), [0], [{ index: 0, title: '测试书店', time: '上午', detail: '阅读' }]);
+  const secondId = store.saveAssistantTrip(answer, '武汉');
+  const secondTrip = store.getState().trips.find((item) => item.id === secondId);
+  store.applyDayAdjustment(secondId, 0, dayRevision(secondTrip, 0), [1], [change]);
+  await store.flush();
+
+  const reopened = createTravelStore(storage); t.after(() => reopened.dispose()); await reopened.hydrate();
+  assert.equal(reopened.canUndoDayAdjustment(id, 0), true);
+  assert.equal(reopened.canUndoDayAdjustment(id, 1), true);
+  assert.equal(reopened.canUndoDayAdjustment(secondId, 0), true);
+  const current = reopened.getState().trips.find((item) => item.id === id);
+  assert.doesNotMatch(JSON.stringify(makeDayAdjustmentRequest(current, 0, [1], '调整时间')), /调整前的私人提醒/);
+  assert.doesNotMatch(formatTripText(current), /调整前的私人提醒/);
+  reopened.undoDayAdjustment(id, 0);
+  const undone = reopened.getState().trips.find((item) => item.id === id);
+  assert.deepEqual(undone.days[0], before.days[0]);
+  assert.deepEqual(undone.completed, before.completed);
+  assert.equal(undone.days[1][0].title, '测试书店');
+  await reopened.flush();
+
+  const restored = createTravelStore(storage); t.after(() => restored.dispose()); await restored.hydrate();
+  assert.equal(restored.canUndoDayAdjustment(id, 0), false);
+  assert.equal(restored.canUndoDayAdjustment(id, 1), true);
+  assert.equal(restored.canUndoDayAdjustment(secondId, 0), true);
+  assert.deepEqual(restored.getState().trips.find((item) => item.id === id).days[0], before.days[0]);
+  restored.undoDayAdjustment(id, 1);
+  restored.undoDayAdjustment(secondId, 0);
+  assert.deepEqual(restored.getState().trips.find((item) => item.id === id).days, before.days);
+  assert.equal(restored.getState().trips.find((item) => item.id === secondId).days[0][1].title, '测试公园');
+});
+
+test('同一天只撤销最近一次有效调整，无变化的结果不会覆盖撤销记录', async (t) => {
+  const { store, id, trip, storage } = await setup(t);
+  store.applyDayAdjustment(id, 0, dayRevision(trip(), 0), [1], [change]);
+  store.applyDayAdjustment(id, 0, dayRevision(trip(), 0), [1], [{ ...change, time: '15:00' }]);
+  const latest = trip();
+  assert.throws(() => store.applyDayAdjustment(id, 0, dayRevision(latest, 0), [1], [{ ...change, time: '15:00' }]), /没有可保存/);
+  assert.equal(trip(), latest);
+  await store.flush();
+  const reopened = createTravelStore(storage); t.after(() => reopened.dispose()); await reopened.hydrate();
+  reopened.undoDayAdjustment(id, 0);
+  const activity = reopened.getState().trips.find((item) => item.id === id).days[0][1];
+  assert.equal(activity.title, change.title);
+  assert.equal(activity.time, change.time);
+  assert.equal(reopened.canUndoDayAdjustment(id, 0), false);
+});
+
+test('重新打开后，撤销仍保护后续编辑、完成状态、日期和地点变化', async (t) => {
+  const mutations = [
+    (store, id) => store.editActivity(id, 0, 1, { title: '手动安排', time: '上午', detail: '' }),
+    (store, id) => store.setActivityLocked(id, 0, 1, true),
+    (store, id) => store.toggleActivity(id, '0-1'),
+    (store, id) => store.bindMapPlace('trip', id, 0, 1, change.title, place(change.title, 30.6)),
+    (store, id, trip) => store.saveTripDetails(id, { ...trip, startDate: '2026-12-31', endDate: '2027-01-01' }),
+  ];
+  for (const mutate of mutations) {
+    const { store, id, trip, storage } = await setup(t);
+    store.applyDayAdjustment(id, 0, dayRevision(trip(), 0), [1], [change]);
+    mutate(store, id, trip());
+    await store.flush();
+    const reopened = createTravelStore(storage); t.after(() => reopened.dispose()); await reopened.hydrate();
+    const current = reopened.getState().trips.find((item) => item.id === id);
+    assert.equal(reopened.canUndoDayAdjustment(id, 0), false);
+    assert.throws(() => reopened.undoDayAdjustment(id, 0), /不能直接撤销/);
+    assert.equal(reopened.getState().trips.find((item) => item.id === id), current);
+  }
+});
+
+test('损坏或旧版缺失的撤销记录不影响当前行程恢复，也不影响其他日期的有效记录', async (t) => {
+  const { store, id, trip, storage } = await setup(t);
+  store.applyDayAdjustment(id, 0, dayRevision(trip(), 0), [1], [change]);
+  store.applyDayAdjustment(id, 1, dayRevision(trip(), 1), [0], [{ index: 0, title: '测试书店', time: '上午', detail: '' }]);
+  await store.flush();
+  const saved = JSON.parse(await storage.getItem(STORAGE_KEY));
+  const valid = saved.trips.find((item) => item.id === id).adjustmentUndo;
+  const malformed = [
+    null, [], {}, { ...valid[0], before: null }, { ...valid[0], before: [null, null, null] },
+    { ...valid[0], before: valid[0].before.slice(1) },
+    { ...valid[0], before: valid[0].before.map((activity) => ({ ...activity, place: { latitude: 'invalid' } })) },
+    { ...valid[0], after: '过期版本' },
+  ];
+  for (const invalid of malformed) {
+    saved.trips.find((item) => item.id === id).adjustmentUndo = { 0: invalid, 1: valid[1], '-1': valid[0], '30': valid[0] };
+    await storage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    const reopened = createTravelStore(storage); t.after(() => reopened.dispose()); await reopened.hydrate();
+    assert.deepEqual(reopened.getState().trips.find((item) => item.id === id).days, trip().days);
+    assert.equal(reopened.canUndoDayAdjustment(id, 0), false);
+    assert.equal(reopened.canUndoDayAdjustment(id, 1), true);
+  }
+  delete saved.trips.find((item) => item.id === id).adjustmentUndo;
+  await storage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  const legacy = createTravelStore(storage); t.after(() => legacy.dispose()); await legacy.hydrate();
+  assert.deepEqual(legacy.getState().trips.find((item) => item.id === id).days, trip().days);
+  assert.equal(legacy.canUndoDayAdjustment(id, 0), false);
 });
 
 test('只调整活动时间时保留完整长备注，仍可保存明确改写的备注', async (t) => {

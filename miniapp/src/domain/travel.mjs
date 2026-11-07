@@ -3,7 +3,7 @@ import { validateTripDetails } from './trip-details.mjs';
 import { readSources } from './query-sources.mjs';
 import { expandActivities, expandTrip } from './activity-slots.mjs';
 import { itineraryForMessage, readItinerary, validPlace } from './map-data.mjs';
-import { dayRevision, previewDayAdjustment, remapDayCompletion } from './day-adjustment.mjs';
+import { dayRevision, previewDayAdjustment, readDayAdjustmentUndo, remapDayCompletion } from './day-adjustment.mjs';
 
 export const STORAGE_KEY = 'roam.travel.v1';
 export const AGENTS = [
@@ -96,7 +96,6 @@ export function createTravelStore(storage, options = {}) {
   let state = initialState(options.apiUrl);
   const listeners = new Set();
   let pending = null;
-  let lastAdjustment = null;
   let toastTimer;
   let writeQueue = Promise.resolve();
   const fetcher = options.fetch || globalThis.fetch;
@@ -129,7 +128,7 @@ export function createTravelStore(storage, options = {}) {
   };
   const canUndoDayAdjustment = (id, day) => {
     const trip = state.trips.find((item) => item.id === id);
-    return !!trip && lastAdjustment?.id === id && lastAdjustment.day === day && lastAdjustment.after === dayRevision(trip, day);
+    return !!trip && trip.adjustmentUndo?.[day]?.after === dayRevision(trip, day);
   };
 
   return {
@@ -171,6 +170,7 @@ export function createTravelStore(storage, options = {}) {
           });
           for (let i = 0; i < trips.length; i++) trips[i] = { ...expandTrip(trips[i]), ...validateTripDetails(trips[i], trips[i].days.length), ...(Array.isArray(trips[i].sources) ? { sources: readSources(trips[i].sources) } : {}) };
           for (const trip of trips) trip.days = trip.days.map((day) => day.map(({ place, locked, ...item }) => ({ ...item, ...(validPlace(place) ? { place } : {}), ...(locked === true ? { locked } : {}) })));
+          for (const trip of trips) trip.adjustmentUndo = readDayAdjustmentUndo(trip);
           const messages = validMessages(saved.messages);
           const chatHistory = Array.isArray(saved.chatHistory) ? saved.chatHistory.filter((item) => item && typeof item.id === 'string' && typeof item.title === 'string' && item.mode === 'demo' && AGENTS.some((agent) => agent.id === item.agent)).map((item) => ({ ...item, messages: validMessages(item.messages).slice(-40) })).slice(-10) : [];
           update({ chatHistory, activeChats: saved.activeChats && typeof saved.activeChats === 'object' ? Object.fromEntries(Object.entries(saved.activeChats).filter(([key, value]) => AGENTS.some((agent) => agent.id === key) && typeof value === 'string')) : {} });
@@ -435,7 +435,10 @@ export function createTravelStore(storage, options = {}) {
       const days = trip.days.slice();
       days[day] = previewDayAdjustment(trip, day, targets, changes, places);
       const next = { ...trip, days };
-      lastAdjustment = { id, day, before: trip.days[day], after: dayRevision(next, day) };
+      const after = dayRevision(next, day);
+      if (after === revision) throw new Error('没有可保存的改动');
+      // 每天保留最近一次调整，和行程一起写入本机，避免重启后失去撤销入口。
+      next.adjustmentUndo = { ...readDayAdjustmentUndo(trip), [day]: { before: trip.days[day], after } };
       update({ trips: state.trips.map((item) => item.id === id ? next : item) }, true);
       toast(`第${day + 1}天已更新，可撤销本次调整`);
     },
@@ -443,9 +446,10 @@ export function createTravelStore(storage, options = {}) {
     undoDayAdjustment(id, day) {
       if (!canUndoDayAdjustment(id, day)) throw new Error('当天安排已修改，不能直接撤销');
       const trip = state.trips.find((item) => item.id === id);
-      const days = trip.days.slice(); days[day] = lastAdjustment.before;
-      lastAdjustment = null;
-      update({ trips: state.trips.map((item) => item.id === id ? { ...trip, days } : item) }, true);
+      const days = trip.days.slice(); days[day] = trip.adjustmentUndo[day].before;
+      const adjustmentUndo = { ...trip.adjustmentUndo };
+      delete adjustmentUndo[day];
+      update({ trips: state.trips.map((item) => item.id === id ? { ...trip, days, adjustmentUndo } : item) }, true);
       toast('已撤销本次调整');
     },
     toggleActivity(tripId, key) {
