@@ -4,6 +4,7 @@ import { createTravelStore, STORAGE_KEY } from '../src/domain/travel.mjs';
 import { comparableDayLegs, dayRevision, makeDayAdjustmentRequest, previewDayAdjustment } from '../src/domain/day-adjustment.mjs';
 import { formatTripText } from '../src/domain/trip-details.mjs';
 import { createChatClient } from '../src/services/chat-client.mjs';
+import { createMiniController } from '../src/services/wechat.mjs';
 
 const answer = { role: 'assistant', mode: 'live', status: 'complete', content: '### Day 1 · 城市漫游\n**上午｜测试博物馆**\n已预约\n**下午｜测试公园**\n散步\n**晚上｜测试餐厅**\n晚餐\n### Day 2 · 返程\n**上午｜测试车站**\n乘车' };
 const change = { index: 1, title: '测试科技馆', time: '下午', detail: '室内参观' };
@@ -236,4 +237,30 @@ test('改动客户端复用安装凭证，并拦截服务端意外返回的越�
   result = [{ ...change, index: 0 }];
   await assert.rejects(client.adjustDay('https://fixture.example', request), /超出选择范围/);
   assert.equal(requests.filter(({ url }) => url.endsWith('/devices')).length, 1);
+});
+
+test('等待共用凭证时取消调整，凭证就绪后只发送新的有效请求', async () => {
+  const calls = [];
+  let finishToken, signalTokenStarted;
+  const tokenStarted = new Promise((resolve) => { signalTokenStarted = resolve; });
+  const client = createChatClient({ storage: memory(), connectSocket() {}, fetch: async (url) => {
+    calls.push(url);
+    if (url.endsWith('/devices')) {
+      await new Promise((resolve) => { finishToken = resolve; signalTokenStarted(); });
+      return { ok: true, async json() { return { token: 'fixture-token' }; } };
+    }
+    return { ok: true, async json() { return { changes: [change] }; } };
+  } });
+  const controller = createMiniController();
+  const request = { targets: [1], instruction: '换成室内' };
+  const cancelled = client.adjustDay('https://fixture.example', request, controller.signal);
+  await tokenStarted;
+  controller.abort();
+  const retried = client.adjustDay('https://fixture.example', request);
+  finishToken();
+  await assert.rejects(cancelled, { name: 'AbortError' });
+  assert.deepEqual(await retried, [change]);
+  assert.deepEqual(calls, ['https://fixture.example/api/v1/chat/devices', 'https://fixture.example/api/v1/trips/adjust-day']);
+  await assert.rejects(client.adjustDay('https://fixture.example', request, controller.signal), { name: 'AbortError' });
+  assert.equal(calls.length, 2);
 });

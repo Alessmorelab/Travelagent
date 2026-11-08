@@ -37,7 +37,10 @@ export function createChatClient({ fetch, storage, connectSocket, reconnectDelay
     return data;
   };
   const post = async (apiUrl, path, body, signal, fallback) => {
+    if (signal?.aborted) throw abortError();
     const token = await tokenFor(apiUrl);
+    // 等待共用凭证期间也可能取消，避免凭证就绪后又发送旧请求。
+    if (signal?.aborted) throw abortError();
     const response = await fetch(`${apiUrl}/api/v1/${path}`, { method: 'POST', signal,
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await response.json();

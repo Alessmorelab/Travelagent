@@ -1,8 +1,12 @@
+import asyncio
 import json
 
+import httpx
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from backend.app.api import trips
 from backend.app.main import app
 from backend.app.services import day_adjustment
 from backend.app.services.chat import get_chat_service
@@ -83,3 +87,73 @@ def test_provider_failure_removes_private_details_and_releases_generation_slot(a
     assert 'private' not in result.text
     del output['error']
     assert client.post('/api/v1/trips/adjust-day', headers=headers, json=REQUEST).status_code == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('interruption', ['disconnect', 'cancel_handler'])
+async def test_interrupted_adjustment_cancels_model_and_allows_retry(monkeypatch, interruption):
+    started, stopped = asyncio.Event(), asyncio.Event()
+    calls = 0
+    owner = 'fixture-cancel-owner'
+
+    async def authenticated(_authorization):
+        return owner
+
+    class Model:
+        def with_structured_output(self, *_args, **_kwargs):
+            return self
+
+        async def ainvoke(self, _messages):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                started.set()
+                try:
+                    await asyncio.Future()
+                finally:
+                    stopped.set()
+            return {'changes': [CHANGE]}
+
+    monkeypatch.setattr(trips, 'authenticated', authenticated)
+    monkeypatch.setattr(day_adjustment, 'model_for', lambda _: Model())
+    test_app = FastAPI()
+    test_app.include_router(trips.router, prefix='/api/v1/trips')
+    incoming = asyncio.Queue()
+    await incoming.put({'type': 'http.request', 'body': json.dumps(REQUEST).encode(), 'more_body': False})
+    responses = []
+
+    async def send(message):
+        responses.append(message)
+
+    path = '/api/v1/trips/adjust-day'
+    scope = {
+        'type': 'http', 'asgi': {'version': '3.0'}, 'http_version': '1.1', 'method': 'POST',
+        'path': path, 'raw_path': path.encode(), 'root_path': '', 'query_string': b'',
+        'headers': [(b'content-type', b'application/json')], 'scheme': 'http',
+        'server': ('testserver', 80), 'client': ('127.0.0.1', 12345),
+    }
+    handler = asyncio.create_task(test_app(scope, incoming.get, send))
+    try:
+        await asyncio.wait_for(started.wait(), timeout=2)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=test_app), base_url='http://testserver') as client:
+            busy = await client.post(path, json=REQUEST)
+            assert busy.status_code == 429
+            if interruption == 'disconnect':
+                await incoming.put({'type': 'http.disconnect'})
+                await asyncio.wait_for(handler, timeout=2)
+                assert responses[0]['status'] == 499
+            else:
+                handler.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await handler
+            assert stopped.is_set()
+            assert owner not in trips._active_owners
+            retry = await client.post(path, json=REQUEST)
+            assert retry.status_code == 200
+            assert retry.json() == {'changes': [CHANGE]}
+            assert calls == 2
+            assert owner not in trips._active_owners
+            assert not any(task.get_coro().__name__ == '_wait_for_disconnect' for task in asyncio.all_tasks())
+    finally:
+        handler.cancel()
+        await asyncio.gather(handler, return_exceptions=True)
