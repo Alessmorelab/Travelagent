@@ -29,6 +29,22 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .button-row > button { flex: 1; min-width: 0; }
 .loading-text { display: block; text-align: center; margin: 160px 0; color: $muted; }
 .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 200; background: rgba(38, 62, 52, .95); color: #fff; padding: 24px 32px; border-radius: 18px; max-width: 86%; font-size: 23px; white-space: normal; text-align: center; }
+.save-warning {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
+  margin: 20px 24px;
+  padding: 24px;
+  border: 2px solid #d9a48b;
+  border-radius: 18px;
+  background: #fff8f1;
+  box-shadow: 0 6px 24px rgba(38, 62, 52, .12);
+  color: $ink;
+}
+.save-warning-title { display: block; font-size: 26px; font-weight: 600; }
+.save-warning-detail { display: block; margin-top: 10px; font-size: 22px; line-height: 1.6; }
+.save-warning-retry { margin-top: 16px; min-height: 76px; padding: 18px 24px; border-radius: 12px; border: 2px solid #d9a48b; font-size: 24px; }
 .note { display: block; font-size: 22px; line-height: 1.85; color: #829073; background: #eeeee3; padding: 24px; border-radius: 20px; }
 .mode-pill { display: flex; align-items: center; gap: 8px; margin-left: auto; color: #7c8876; font-size: 18px; white-space: nowrap; }
 .mode-dot { width: 8px; height: 8px; border-radius: 50%; background: $orange; }

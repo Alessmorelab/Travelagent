@@ -14,7 +14,7 @@ export type Message = { id: string; role: 'user' | 'assistant'; content: string;
 export type QueryWarning = { kind: string; message: string; retryable: boolean; stage: string; label: string };
 export type Progress = { key: string; label: string; state: 'running' | 'complete' | 'interrupted'; kind?: 'task' | 'tool' };
 export type ChatSnapshot = { id: string; title: string; agent: Agent; mode: 'demo' | 'live'; apiUrl?: string; messages: Message[]; thread_id?: string; updated: number };
-export type State = { tab: Tab; agent: Agent; filter: string; activeDay: number; focusTripId?: string; busy: boolean; connectionStatus?: string; mapTarget?: { kind: 'trip' | 'message'; id: string } | null; error: string; toast: string; hydrated: boolean; connection: Connection; preferences: Preferences; preferencesConfirmed: boolean; favorites: string[]; savedPlaces: SavedPlace[]; trips: Trip[]; messages: Message[]; threads: Partial<Record<Agent, string>>; lastQuery?: string; lastRequestId?: string; progress: Progress[]; chatHistory: ChatSnapshot[]; activeChats: Partial<Record<Agent, string>> };
+export type State = { tab: Tab; agent: Agent; filter: string; activeDay: number; focusTripId?: string; busy: boolean; connectionStatus?: string; mapTarget?: { kind: 'trip' | 'message'; id: string } | null; error: string; toast: string; hydrated: boolean; saving: boolean; saveError: string; connection: Connection; preferences: Preferences; preferencesConfirmed: boolean; favorites: string[]; savedPlaces: SavedPlace[]; trips: Trip[]; messages: Message[]; threads: Partial<Record<Agent, string>>; lastQuery?: string; lastRequestId?: string; progress: Progress[]; chatHistory: ChatSnapshot[]; activeChats: Partial<Record<Agent, string>> };
 export const STORAGE_KEY: string;
 export const AGENTS: { id: Agent; label: string; icon: string }[];
 export const DESTINATIONS: Destination[];
@@ -49,5 +49,5 @@ export function createTravelStore(storage: { getItem(key: string): Promise<strin
   openMap(kind: 'trip' | 'message', id: string): void; closeMap(): void;
   bindMapPlace(kind: 'trip' | 'message', id: string, day: number, index: number, expectedTitle: string, place: MapPlace, expectedSlot?: string): void;
   removeActivity(tripId: string, day: number, index: number): void;
-  removeTrip(id: string): void; flush(): Promise<void>; dispose(): void; toast(message: string): void;
+  removeTrip(id: string): void; retrySave(): Promise<void>; flush(): Promise<void>; dispose(): void; toast(message: string): void;
 };

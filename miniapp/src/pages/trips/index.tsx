@@ -114,10 +114,10 @@ export default function TripsPage() {
   const mapTrip = mapTarget?.kind === 'trip' ? state.trips.find((item) => item.id === mapTarget.id) : null;
   const mapMessage = mapTarget?.kind === 'message' ? state.messages.find((item) => item.id === mapTarget.id) : null;
   const mapItinerary = mapMessage ? itineraryForMessage(mapMessage) : null;
-  if (mapTarget && (mapTrip || mapItinerary)) return <ItineraryMap key={`${mapTarget.kind}-${mapTarget.id}`} state={state} kind={mapTarget.kind} id={mapTarget.id}
-    days={(mapTrip || mapItinerary)!.days} destination={(mapTrip || mapItinerary)!.destination} sample={mapTrip?.sample || mapMessage?.mode === 'demo'} onClose={() => store.closeMap()} />;
-  if (mapOpen) return <PlaceMapView state={state} initialCity={trip?.destination || ''} onClose={() => setMapOpen(false)} />;
-  return <View className='page'><PageHeading en='MY JOURNEYS' title='我的行程' subtitle='把期待，变成出发。' action={create} /><Button className='text-button' onClick={() => setMapOpen(true)}>⌖ 地点地图</Button>
+  if (mapTarget && (mapTrip || mapItinerary)) return <><Toast state={state} /><ItineraryMap key={`${mapTarget.kind}-${mapTarget.id}`} state={state} kind={mapTarget.kind} id={mapTarget.id}
+    days={(mapTrip || mapItinerary)!.days} destination={(mapTrip || mapItinerary)!.destination} sample={mapTrip?.sample || mapMessage?.mode === 'demo'} onClose={() => store.closeMap()} /></>;
+  if (mapOpen) return <><Toast state={state} /><PlaceMapView state={state} initialCity={trip?.destination || ''} onClose={() => setMapOpen(false)} /></>;
+  return <View className='page'><Toast state={state} /><PageHeading en='MY JOURNEYS' title='我的行程' subtitle='把期待，变成出发。' action={create} /><Button className='text-button' onClick={() => setMapOpen(true)}>⌖ 地点地图</Button>
     {!trip ? <Empty icon='map' title='下一站，还在等你' description='创建一份行程草稿，慢慢填满旅途的每一天。' action='新建行程' onClick={create} /> : <>
       {state.trips.length > 1 && <ScrollView scrollX className='trip-select'>{state.trips.map((item) => <Button key={item.id} className={item.id === trip.id ? 'active' : ''} onClick={() => { setSelectedId(item.id); store.setActiveDay(0); }}>{item.title}</Button>)}</ScrollView>}
       <Scenic destination={destination} className='trip-cover'><View className='trip-cover-copy'><Text className='trip-status'>{trip.sample ? '示例行程 · 待核对' : '行程草稿 · 待完善'}</Text><Text className='trip-title'>{trip.title}</Text><Text>{trip.startDate ? `${formatDate(trip.startDate)} — ${formatDate(trip.endDate)}` : '日期待填写'} · {trip.travelers ? `${trip.travelers}人同行` : '人数待填写'}</Text></View></Scenic>
@@ -144,6 +144,6 @@ export default function TripsPage() {
     {trip && editIndex !== null && <ActivitySheet key={`${trip.id}-${day}-${editIndex}`} trip={trip} day={day} index={editIndex} onClose={() => setEditIndex(null)} />}
     {trip && showSources && <QuerySources sources={readSources(trip.sources)} available={Array.isArray(trip.sources)} onClose={() => setShowSources(false)} />}
     {trip?.sourceText && showSource && <Sheet title='原始回复' onClose={() => setShowSource(false)}><Text className='trip-source-text' selectable>{trip.sourceText}</Text></Sheet>}
-    {formOpen && <PreferenceSheet kind='trip' state={state} onClose={() => setFormOpen(false)} />}<Toast state={state} />
+    {formOpen && <PreferenceSheet kind='trip' state={state} onClose={() => setFormOpen(false)} />}
   </View>;
 }

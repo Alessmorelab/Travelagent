@@ -45,6 +45,7 @@ export default function FavoritesPage() {
   const open = (place: SavedPlace) => { void Taro.openLocation({ latitude: place.latitude, longitude: place.longitude, name: place.name, address: place.address }).catch(() => store.toast('暂时无法打开位置，请检查微信或网络')); };
   const selected = state.savedPlaces.find((place) => place.id === adding);
   return <View className='page'>
+    <Toast state={state} />
     <PageHeading en='PLACES TO KEEP' title='我的收藏' subtitle='保存实际查到的地点，慢慢安排下一次出发。' />
     <View className='saved-place-tabs'><Button className={tab === 'places' ? 'active' : ''} onClick={() => setTab('places')}>地点收藏 · {state.savedPlaces.length}</Button><Button className={tab === 'inspiration' ? 'active' : ''} onClick={() => setTab('inspiration')}>灵感目的地 · {state.favorites.length}</Button></View>
     {tab === 'places' ? <>
@@ -63,6 +64,6 @@ export default function FavoritesPage() {
       {list.length ? list.map((d) => <View className='favorite-card' key={d.id}><View className='favorite-photo-wrap'><View onClick={() => setDetail(d.id)}><Scenic destination={d} className='favorite-image' /></View><FavoriteButton destination={d} state={state} /></View><View className='favorite-copy'><View className='favorite-heading'><Text>{d.name}</Text><Text className='country'> / {d.country}</Text></View><Text className='destination-subtitle'>{d.subtitle}</Text><View className='favorite-footer'><Text>{d.days} · {d.category}</Text><Button className='text-button' onClick={() => setDetail(d.id)}>去看看 →</Button></View></View></View>) : <Empty icon='bookmark' title='这里还没有旅行灵感' description='浏览目的地，收藏喜欢的方向。' action='发现目的地' onClick={discover} />}
     </>}
     {selected && <AddPlaceSheet key={selected.id} place={selected} state={state} onClose={() => setAdding('')} />}
-    {detail && <DestinationSheet id={detail} state={state} onClose={() => setDetail('')} />}<Toast state={state} />
+    {detail && <DestinationSheet id={detail} state={state} onClose={() => setDetail('')} />}
   </View>;
 }

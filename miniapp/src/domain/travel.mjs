@@ -40,6 +40,7 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 export function initialState(apiUrl = 'http://127.0.0.1:8000') {
   return {
     tab: 'assistant', agent: 'team', filter: '全部', activeDay: 0, busy: false, error: '', toast: '', hydrated: false,
+    saving: false, saveError: '',
     connection: { mode: 'live', apiUrl },
     preferences: { origin: '武汉', destination: '京都', startDate: '2026-11-07', endDate: '2026-11-10', travelers: 2, budget: 8000, style: '松弛慢游' },
     preferencesConfirmed: false,
@@ -98,18 +99,33 @@ export function createTravelStore(storage, options = {}) {
   let pending = null;
   let toastTimer;
   let writeQueue = Promise.resolve();
+  let saveVersion = 0;
   const fetcher = options.fetch || globalThis.fetch;
   const checkConnection = options.validateConnection || validateConnection;
   const createController = options.createAbortController || (() => new AbortController());
   const emit = () => listeners.forEach((listener) => listener(state));
   const persist = () => {
+    const version = ++saveVersion;
     const { connection, preferences, preferencesConfirmed, favorites, savedPlaces, messages, threads, trips, chatHistory, activeChats } = state;
     const serialized = JSON.stringify({ version: 2, connection, preferences, preferencesConfirmed, favorites, savedPlaces, messages: messages.slice(-80), threads, trips, chatHistory: chatHistory.slice(-10), activeChats });
-    writeQueue = writeQueue.then(() => storage.setItem(STORAGE_KEY, serialized)).catch(() => {
-      state = { ...state, toast: '本次修改尚未保存，请检查本地存储空间' }; emit();
+    writeQueue = writeQueue.then(async () => {
+      try {
+        await storage.setItem(STORAGE_KEY, serialized);
+      } catch {
+        if (version === saveVersion) update({ saving: false, saveError: '请检查设备存储空间后重试，成功前请保持小程序打开。' });
+        return;
+      }
+      // 只用最新一次写入的结果更新提示，旧快照成功不代表新修改已保存。
+      if (version === saveVersion) update({ saving: false, saveError: '' });
     });
+    update({ saving: true });
+    return writeQueue;
   };
-  const update = (patch, save = false) => { state = { ...state, ...patch }; emit(); if (save && state.hydrated) persist(); };
+  const update = (patch, save = false) => {
+    state = { ...state, ...patch };
+    if (save && state.hydrated) persist();
+    else emit();
+  };
   const toast = (message) => { clearTimeout(toastTimer); update({ toast: message }); toastTimer = setTimeout(() => update({ toast: '' }), 3000); toastTimer.unref?.(); };
   const stop = () => { pending?.controller.abort(); pending = null; };
   const validProgress = (steps, interrupted = false) => Array.isArray(steps) ? steps.filter((step) => step && typeof step.key === 'string' && typeof step.label === 'string' && ['running', 'complete', 'interrupted'].includes(step.state)).slice(-24).map((step) => ({ key: step.key.slice(0, 128), label: step.label.slice(0, 120), kind: step.kind === 'tool' ? 'tool' : 'task', state: interrupted && step.state === 'running' ? 'interrupted' : step.state })) : [];
@@ -456,6 +472,10 @@ export function createTravelStore(storage, options = {}) {
       update({ trips: state.trips.map((trip) => trip.id === tripId ? { ...trip, completed: trip.completed.includes(key) ? trip.completed.filter((item) => item !== key) : [...trip.completed, key] } : trip) }, true);
     },
     removeTrip(id) { update({ trips: state.trips.filter((trip) => trip.id !== id), activeDay: 0 }, true); toast('行程已删除'); },
+    retrySave() {
+      if (!state.hydrated || state.saving || !state.saveError) return writeQueue;
+      return persist();
+    },
     flush: () => writeQueue,
     dispose() { stop(); clearTimeout(toastTimer); listeners.clear(); },
     toast,

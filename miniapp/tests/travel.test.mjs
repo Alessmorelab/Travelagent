@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTravelStore, initialState, STORAGE_KEY, validatePreferences, validateConnection } from '../src/domain/travel.mjs';
+import { dayRevision } from '../src/domain/day-adjustment.mjs';
 
 function memoryStorage() {
   const values = new Map();
@@ -104,6 +105,109 @@ test('损坏的本地记录恢复为可用状态，不导致启动崩溃', async
   const store = createTravelStore(storage); t.after(() => store.dispose()); await store.hydrate();
   assert.equal(store.getState().hydrated, true); assert.equal(store.getState().connection.mode, 'live');
   assert.match(store.getState().toast, /初始体验/);
+});
+
+test('保存失败持续提示，重试保存最新内容并在重新打开后恢复行程和撤销记录', async (t) => {
+  const storage = memoryStorage();
+  let failing = false;
+  const store = createTravelStore({ ...storage, async setItem(key, value) {
+    if (failing) throw new Error('fixture storage full with private details');
+    await storage.setItem(key, value);
+  } });
+  t.after(() => store.dispose()); await store.hydrate();
+  const id = store.saveAssistantTrip({ role: 'assistant', mode: 'live', status: 'complete',
+    content: '### Day 1\n**上午｜测试公园**\n散步\n### Day 2\n**上午｜测试书店**\n阅读' }, '武汉');
+  const trip = () => store.getState().trips.find((item) => item.id === id);
+  store.applyDayAdjustment(id, 0, dayRevision(trip(), 0), [0], [{ index: 0, title: '测试博物馆', time: '下午', detail: '参观' }]);
+  await store.flush();
+  const previousSaved = await storage.getItem(STORAGE_KEY);
+  failing = true;
+  store.editActivity(id, 1, 0, { title: '测试书店', time: '10:00', detail: '请保留这条新备注' });
+  store.savePreferences({ ...store.getState().preferences, origin: '上海' });
+  await store.flush();
+  const failure = store.getState().saveError;
+  assert.ok(failure);
+  assert.doesNotMatch(failure, /private details/);
+  assert.equal(store.getState().saving, false);
+  assert.equal(await storage.getItem(STORAGE_KEY), previousSaved);
+  store.toast('已复制行程'); store.setTab('favorites'); store.toast('');
+  assert.equal(store.getState().saveError, failure);
+  await store.retrySave();
+  assert.equal(store.getState().saveError, failure);
+  assert.equal(trip().days[1][0].detail, '请保留这条新备注');
+  failing = false;
+  await store.retrySave();
+  assert.equal(store.getState().saveError, '');
+  assert.equal(store.getState().saving, false);
+  const saved = JSON.parse(await storage.getItem(STORAGE_KEY));
+  assert.equal('saveError' in saved, false);
+  assert.equal('saving' in saved, false);
+  const reopened = createTravelStore(storage); t.after(() => reopened.dispose()); await reopened.hydrate();
+  assert.equal(reopened.getState().preferences.origin, '上海');
+  assert.equal(reopened.getState().trips.find((item) => item.id === id).days[1][0].detail, '请保留这条新备注');
+  assert.equal(reopened.canUndoDayAdjustment(id, 0), true);
+  reopened.undoDayAdjustment(id, 0);
+  assert.equal(reopened.getState().trips.find((item) => item.id === id).days[0][0].title, '测试公园');
+});
+
+test('连续写入时只有最新结果能清除失败提示，重复重试复用当前保存任务', async (t) => {
+  const storage = memoryStorage(), writes = [];
+  let failFirst = true;
+  const store = createTravelStore({ ...storage, async setItem(key, value) {
+    if (failFirst) { failFirst = false; throw new Error('fixture write failure'); }
+    await new Promise((resolve, reject) => writes.push({ value, resolve, reject }));
+    await storage.setItem(key, value);
+  } });
+  t.after(() => store.dispose()); await store.hydrate();
+  store.toggleFavorite('coast'); await store.flush();
+  const failure = store.getState().saveError;
+  const retry = store.retrySave();
+  assert.equal(store.retrySave(), retry);
+  await new Promise(setImmediate);
+  assert.equal(writes.length, 1);
+  store.savePreferences({ ...store.getState().preferences, budget: 9000 });
+  const latest = store.flush();
+  assert.equal(writes.length, 1, '按顺序写入，避免旧数据最后覆盖新数据');
+  writes[0].resolve(); await retry;
+  await new Promise(setImmediate);
+  assert.equal(store.getState().saving, true);
+  assert.equal(store.getState().saveError, failure, '旧快照成功后仍有新修改待保存');
+  assert.equal(writes.length, 2);
+  assert.equal(JSON.parse(writes[1].value).preferences.budget, 9000);
+  writes[1].reject(new Error('fixture second failure')); await latest;
+  assert.equal(store.getState().saving, false);
+  assert.equal(store.getState().saveError, failure);
+
+  // 后续正常编辑同样可以恢复保存，前一次失败不会阻断写入队列。
+  store.savePreferences({ ...store.getState().preferences, budget: 10000 });
+  await new Promise(setImmediate);
+  writes[2].resolve(); await store.flush();
+  assert.equal(store.getState().saveError, '');
+  assert.equal(store.getState().saving, false);
+  assert.equal(JSON.parse(await storage.getItem(STORAGE_KEY)).preferences.budget, 10000);
+});
+
+test('旧版升级写回失败后可重试，保留原有行程和设置', async (t) => {
+  const storage = memoryStorage();
+  const saved = { ...initialState(), version: 1 };
+  saved.preferences.origin = '上海';
+  await storage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  let failing = true;
+  const store = createTravelStore({ ...storage, async setItem(key, value) {
+    if (failing) throw new Error('fixture storage failure');
+    await storage.setItem(key, value);
+  } });
+  t.after(() => store.dispose()); await store.hydrate(); await store.flush();
+  assert.ok(store.getState().saveError);
+  assert.equal(store.getState().preferences.origin, '上海');
+  assert.equal(JSON.parse(await storage.getItem(STORAGE_KEY)).version, 1);
+  failing = false;
+  await store.retrySave();
+  const reopened = createTravelStore(storage); t.after(() => reopened.dispose()); await reopened.hydrate();
+  assert.equal(JSON.parse(await storage.getItem(STORAGE_KEY)).version, 2);
+  assert.equal(reopened.getState().preferences.origin, '上海');
+  assert.deepEqual(reopened.getState().trips.map((trip) => trip.id), saved.trips.map((trip) => trip.id));
+  assert.equal(reopened.getState().saveError, '');
 });
 
 test('部分损坏的行程与消息会被过滤，完整记录仍能恢复', async (t) => {

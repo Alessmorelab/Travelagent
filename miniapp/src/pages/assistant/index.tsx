@@ -78,6 +78,7 @@ export default function AssistantPage() {
       <View className='dialogue-heading'><Text className='dialogue-title'>{title}</Text>{state.agent !== 'team' && <Text className='dialogue-subtitle'>{AGENTS.find((agent) => agent.id === state.agent)?.label}</Text>}</View>
       <Button className='dialogue-header-button new-chat' disabled={state.busy} onClick={newChat} ariaLabel='新对话'>＋</Button>
     </View>
+    <Toast state={state} />
     <ScrollView id='conversation-scroll' className='conversation-scroll' scrollY enhanced scrollIntoView={anchor}
       scrollWithAnimation={false} lowerThreshold={80}
       onTouchStart={() => { touching.current = true; }} onTouchEnd={() => { touching.current = false; }} onTouchCancel={() => { touching.current = false; }}
@@ -118,6 +119,5 @@ export default function AssistantPage() {
       <Button onClick={() => setPanel('explore')}><Text>⌖</Text><View><Text>旅行灵感</Text><Text>看看值得出发的地方</Text></View><Text>›</Text></Button>
     </View></Sheet>}
     {panel === 'explore' && <Sheet title='给出发一点灵感' onClose={() => setPanel(null)}><View className='destination-grid'>{DESTINATIONS.map((destination) => <DestinationCard key={destination.id} destination={destination} state={state} onClick={() => { setPanel(null); setDetail(destination.id); }} />)}</View></Sheet>}
-    <Toast state={state} />
   </View>;
 }

@@ -22,7 +22,16 @@ export function PageHeading({ en, title, subtitle, action }: { en: string; title
 export function ModePill({ state }: { state: State }) {
   return <View className={`mode-pill ${state.connection.mode}`}><View className='mode-dot' /><Text>{state.connection.mode === 'demo' ? '灵感预览' : '真实服务'}</Text></View>;
 }
-export function Toast({ state }: { state: State }) { return state.toast ? <View className='toast'>{state.toast}</View> : null; }
+export function Toast({ state }: { state: State }) {
+  if (state.saveError) return <View className='save-warning'>
+    <Text className='save-warning-title'>有改动尚未保存到本机</Text>
+    <Text className='save-warning-detail'>{state.saveError}</Text>
+    <Button className='save-warning-retry' disabled={state.saving} loading={state.saving} onClick={() => void store.retrySave()}>
+      {state.saving ? '正在保存…' : '重试保存'}
+    </Button>
+  </View>;
+  return state.toast ? <View className='toast'>{state.toast}</View> : null;
+}
 export function Empty({ icon, title, description, action, onClick }: { icon: string; title: string; description: string; action: string; onClick: () => void }) {
   return <View className='empty'><View className='empty-icon'><Icon name={icon} /></View><Text className='empty-title'>{title}</Text><Text className='empty-description'>{description}</Text><Button className='primary-button' onClick={onClick}>{action} →</Button></View>;
 }
