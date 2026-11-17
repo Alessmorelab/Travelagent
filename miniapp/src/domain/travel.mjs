@@ -157,16 +157,26 @@ export function createTravelStore(storage, options = {}) {
         if (raw) {
           const saved = JSON.parse(raw);
           if (![1, 2].includes(saved.version)) throw new Error('Unsupported data');
-          const preferences = validatePreferences(saved.preferences);
+          const defaults = initialState(options.apiUrl);
+          let preferences = defaults.preferences, preferencesRecovered = false, connectionRecovered = false;
+          try {
+            preferences = validatePreferences(saved.preferences);
+          } catch { preferencesRecovered = true; }
           // Older versions saved the sample Kyoto preferences automatically.
-          const defaults = initialState().preferences;
-          const preferencesConfirmed = typeof saved.preferencesConfirmed === 'boolean' ? saved.preferencesConfirmed
-            : Object.keys(defaults).some((key) => preferences[key] !== defaults[key]);
+          const preferencesConfirmed = !preferencesRecovered && (typeof saved.preferencesConfirmed === 'boolean' ? saved.preferencesConfirmed
+            : Object.keys(defaults.preferences).some((key) => preferences[key] !== defaults.preferences[key]));
           // 首次升级到真实服务默认值；之后保留用户主动选择的模式和地址。
-          const connection = checkConnection({ ...saved.connection,
-            ...(saved.version === 1 ? { mode: 'live' } : {}),
-            ...(!saved.connection?.apiUrl || /^https?:\/\/api\.example\.com\/?$/i.test(saved.connection.apiUrl)
-              ? { apiUrl: initialState(options.apiUrl).connection.apiUrl } : {}) });
+          let connection;
+          const resetAddress = !saved.connection?.apiUrl || /^https?:\/\/api\.example\.com\/?$/i.test(saved.connection.apiUrl);
+          try {
+            connection = checkConnection({ ...saved.connection,
+              ...(saved.version === 1 ? { mode: 'live' } : {}),
+              ...(resetAddress ? { apiUrl: defaults.connection.apiUrl } : {}) });
+            connectionRecovered = resetAddress;
+          } catch {
+            connectionRecovered = true;
+            connection = { ...defaults.connection, ...(saved.version === 2 && saved.connection?.mode === 'demo' ? { mode: 'demo' } : {}) };
+          }
           if (!Array.isArray(saved.favorites) || !Array.isArray(saved.trips) || !Array.isArray(saved.messages)) throw new Error('Invalid data');
           const trips = saved.trips.filter((trip) => {
             try {
@@ -189,8 +199,9 @@ export function createTravelStore(storage, options = {}) {
           for (const trip of trips) trip.adjustmentUndo = readDayAdjustmentUndo(trip);
           const messages = validMessages(saved.messages);
           const chatHistory = Array.isArray(saved.chatHistory) ? saved.chatHistory.filter((item) => item && typeof item.id === 'string' && typeof item.title === 'string' && item.mode === 'demo' && AGENTS.some((agent) => agent.id === item.agent)).map((item) => ({ ...item, messages: validMessages(item.messages).slice(-40) })).slice(-10) : [];
-          update({ chatHistory, activeChats: saved.activeChats && typeof saved.activeChats === 'object' ? Object.fromEntries(Object.entries(saved.activeChats).filter(([key, value]) => AGENTS.some((agent) => agent.id === key) && typeof value === 'string')) : {} });
-          update({ preferences, preferencesConfirmed, connection, savedPlaces: readSavedPlaces(saved.savedPlaces), favorites: saved.favorites.filter((id) => DESTINATIONS.some((d) => d.id === id)), trips, messages, threads: saved.threads && typeof saved.threads === 'object' ? Object.fromEntries(Object.entries(saved.threads).filter(([key, value]) => AGENTS.some((a) => a.id === key) && typeof value === 'string')) : {} });
+          update({ chatHistory, activeChats: !connectionRecovered && saved.activeChats && typeof saved.activeChats === 'object' ? Object.fromEntries(Object.entries(saved.activeChats).filter(([key, value]) => AGENTS.some((agent) => agent.id === key) && typeof value === 'string')) : {} });
+          update({ preferences, preferencesConfirmed, connection, savedPlaces: readSavedPlaces(saved.savedPlaces), favorites: saved.favorites.filter((id) => DESTINATIONS.some((d) => d.id === id)), trips, messages, threads: !connectionRecovered && saved.threads && typeof saved.threads === 'object' ? Object.fromEntries(Object.entries(saved.threads).filter(([key, value]) => AGENTS.some((a) => a.id === key) && typeof value === 'string')) : {} });
+          if (preferencesRecovered || connectionRecovered) toast('已恢复行程、收藏与对话，部分设置需在「我的」重新确认');
           migrated = saved.version === 1;
         }
       } catch { toast('已载入初始体验，本地记录暂时无法读取'); }
