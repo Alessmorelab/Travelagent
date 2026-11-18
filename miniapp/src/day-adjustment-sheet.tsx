@@ -79,7 +79,8 @@ export function DayAdjustmentSheet({ trip, day, connection, onClose }: { trip: T
     try { store.applyDayAdjustment(trip.id, day, preview.revision, preview.targets, preview.changes, places); close(); }
     catch (e) { setError((e as Error).message); }
   };
-  return <Sheet title={`AI 调整第 ${day + 1} 天`} onClose={close}>
+  return <Sheet title={`AI 调整第 ${day + 1} 天`} folio={`DAY ${String(day + 1).padStart(2, '0')}  /  REVISION`} onClose={close}>
+    <View className='form-chapter'><Text>{preview ? '02' : '01'}</Text><Text>{preview ? '核对改动' : '选择要调整的安排'}</Text></View>
     {!preview ? <>
       <Text className='sheet-description'>勾选要改的安排（最多四项）。已锁定、已完成和未勾选的安排都会保留。</Text>
       {before.map((activity, index) => {

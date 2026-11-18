@@ -195,7 +195,7 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .sheet-header { display: flex; align-items: center; justify-content: space-between; padding: 0 40px 22px; flex-shrink: 0; }
 .sheet-header > text { font-family: 'Songti SC', serif; font-size: 40px; }
 .sheet-close { height: 68px; width: 68px; border-radius: 50%; border: 2px solid #dbe2d2; font-size: 36px; display: flex; align-items: center; justify-content: center; }
-.sheet-scroll { height: 72vh; max-height: 72vh; }
+.sheet-scroll { flex: 1; min-height: 0; height: 0; }
 .sheet-content { padding: 0 40px 42px; }
 .sheet-description { display: block; font-size: 23px; color: #89967b; line-height: 1.85; margin-bottom: 30px; }
 .detail-image { height: 365px; }
@@ -405,3 +405,74 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .index-number { font: italic 26px Georgia, serif; color: $orange; }
 .index-name { font-size: 28px; font-weight: 600; flex: 1; }
 .index-meta { font-size: 21px; color: $muted; }
+
+.folio-code, .question-byline, .reply-imprint, .stop-time { display: block; font-size: 20px; font-weight: 600; letter-spacing: 2px; color: $orange; }
+.dialogue-message.user { align-items: flex-end; flex-direction: column; gap: 8px; }
+.question-byline { color: $muted; font-size: 20px; }
+.user-message-text { background: $sage; border-radius: 14px 2px 14px 14px; }
+.dialogue-message.assistant { margin: 18px 0 40px; }
+.assistant-identity { padding-top: 16px; border-top: 3px solid $ink; gap: 12px; }
+.assistant-mark { font: italic 600 31px/1 Georgia, serif; background: $ink; color: #f3dab0; border-radius: 50%; }
+.reply-byline { font: 600 31px/1.4 'Songti SC', serif; }
+.reply-imprint { flex: 1; font-size: 18px; color: $muted; letter-spacing: 3px; }
+.message-mode { border: 1px solid $line; border-radius: 6px; padding: 3px 10px; }
+.assistant-answer { font-size: 29px; line-height: 1.8; overflow-wrap: anywhere; }
+.reply-itinerary { background: $white; border: 2px solid $line; border-left: 6px solid $orange; border-radius: 8px; padding: 18px 24px; margin-top: 24px; }
+.reply-itinerary-label, .reply-itinerary-actions, .route-mast, .route-heading, .route-key, .route-lookup, .stop-heading, .form-chapter { display: flex; align-items: center; gap: 16px; }
+.reply-itinerary-label, .route-mast, .route-heading, .route-key { justify-content: space-between; }
+.reply-itinerary-label { flex-wrap: wrap; font-size: 21px; color: $muted; }
+.reply-itinerary-title { display: block; font: 600 34px/1.5 'Songti SC', serif; margin: 10px 0 14px; overflow-wrap: anywhere; }
+.reply-itinerary-actions { border-top: 1px dashed #b4bda9; padding-top: 14px; }
+.reply-itinerary-actions button { flex: 1; min-height: 74px; border-radius: 8px; background: $sage; color: $ink; font-size: 24px; }
+.reply-itinerary-actions button:last-child { background: $ink; color: $white; }
+.message-actions { flex-wrap: wrap; gap: 0 28px; }
+.message-action { min-height: 70px; }
+.reply-progress .progress-toggle { color: $muted; min-height: 60px; }
+.query-source { border-radius: 8px; background: $white; border-left: 5px solid $orange; }
+.query-source-title { color: $ink; font-family: 'Songti SC', serif; }
+
+.route-mast { border-top: 4px solid $ink; }
+.route-mast .atlas-link { min-height: 64px; }
+.route-heading { align-items: baseline; padding-bottom: 24px; }
+.route-title { font: 600 54px/1.2 'Songti SC', serif; }
+.route-page-no { font: italic 27px Georgia, serif; color: $orange; }
+.itinerary-map-page .day-tabs { margin-bottom: 18px; }
+.route-plate { border: 2px solid $ink; border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+.route-plate .place-map { margin: 0; height: 420px; border-radius: 0; width: 100%; }
+.route-frontispiece { background: #234e48 url('./assets/route-print.svg') center / cover; color: #fff4d9; padding: 46px 28px; }
+.route-frontispiece text { display: block; }
+.route-frontispiece text:first-child { font: 600 37px/1.5 'Songti SC', serif; }
+.route-frontispiece text:last-child { margin-top: 8px; font-size: 22px; }
+.route-key { background: $ink; color: #fff7e5; padding: 14px 20px; font-size: 22px; }
+.route-lookup .form-input { flex: 1; min-width: 0; }
+.route-lookup button { min-height: 88px; padding: 12px 20px; font-size: 24px; }
+.itinerary-map-page .map-mode-options { padding: 0 0 16px; }
+.map-mode { min-height: 74px; border-radius: 8px; }
+.itinerary-map-page .map-stop, .itinerary-map-page .map-leg { border-radius: 8px; background: $white; }
+.itinerary-map-page .map-leg { border-left: 5px solid $ink; }
+.itinerary-map-page .map-leg.failed { border-left-color: $orange; }
+.stop-heading { width: 100%; text-align: left; padding-bottom: 14px; }
+.stop-number { flex: none; background: $ink; color: $white; border-radius: 50%; width: 60px; height: 60px; text-align: center; font: italic 28px/60px Georgia, serif; }
+.stop-heading > view { min-width: 0; }
+.stop-time { font-size: 21px; letter-spacing: 0; }
+.map-stop-title { display: block; font: 600 31px/1.5 'Songti SC', serif; overflow-wrap: anywhere; }
+.map-stop .text-button { margin-right: 18px; }
+
+.sheet { height: 84vh; border-radius: 22px 22px 0 0; }
+.sheet-handle { margin: 12px auto; height: 5px; }
+.sheet-header { align-items: center; border-top: 3px solid $ink; border-bottom: 1px solid $line; margin: 0 32px; padding: 16px 0 18px; }
+.sheet-heading { min-width: 0; }
+.sheet-title { display: block; font: 600 40px/1.4 'Songti SC', serif; margin-top: 4px; }
+.sheet-close { flex: none; height: 74px; width: 74px; background: $white; }
+.sheet-content { padding: 24px 32px 36px; }
+.sheet-description { color: $muted; margin-bottom: 20px; }
+.sheet-footer { flex-shrink: 0; background: $white; border-top: 2px solid $line; padding: 14px 32px; }
+.sheet-footer .form-error { margin: 0 0 10px; }
+.sheet-footer > .primary-button { width: 100%; }
+.form-chapter { margin: 0 0 18px; font: 600 31px/1.4 'Songti SC', serif; }
+.form-chapter > text:first-child { font: italic 27px/1 Georgia, serif; color: $orange; border-right: 1px solid $line; padding-right: 14px; }
+.sheet .field-label { color: #42574c; margin-bottom: 8px; }
+.sheet .form-input { border-color: #b7c1b0; }
+.sheet .derived-date { display: flex; align-items: center; background: $sage; border-style: dashed; color: $muted; }
+.sheet .adjust-card, .sheet .adjust-slot { border-radius: 8px; }
+.sheet .adjust-card { border-left: 5px solid $orange; }

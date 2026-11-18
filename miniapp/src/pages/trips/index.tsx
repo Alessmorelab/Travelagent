@@ -63,18 +63,20 @@ function ActivitySheet({ trip, day, index, onClose }: { trip: Trip; day: number;
     const result = await Taro.showModal({ title: '删除这项安排？', content: existing?.title || '', confirmText: '删除', confirmColor: '#cb7651' });
     if (result.confirm) { store.removeActivity(trip.id, day, index); onClose(); }
   };
-  return <Sheet title={existing ? '编辑行程安排' : '添加行程安排'} onClose={onClose}>
-    <Text className='sheet-description'>第 {day + 1} 天 · 日期、地点与交通信息请按实际情况核对。</Text>
+  return <Sheet title={existing ? '编辑行程安排' : '添加行程安排'} folio={`DAY ${String(day + 1).padStart(2, '0')}  /  FIELD NOTES`} onClose={onClose} footer={<>
+    {error && <Text className='form-error'>{error}</Text>}
+    <Button className='primary-button' onClick={save}>保存安排</Button>
+  </>}>
+    <View className='form-chapter'><Text>{String((existing ? index : trip.days[day].length) + 1).padStart(2, '0')}</Text><Text>{trip.destination} · 第 {day + 1} 天</Text></View>
     <View className='form-field'><Text className='field-label'>地点或安排</Text><Input className='form-input' value={value.title} maxlength={100} placeholder='例如：黄鹤楼' onInput={(e) => setValue({ ...value, title: e.detail.value })} /></View>
     <View className='form-field'><Text className='field-label'>时间</Text><Input className='form-input' value={value.time} maxlength={40} placeholder='例如：上午或 09:00' onInput={(e) => setValue({ ...value, time: e.detail.value })} /></View>
     <View className='form-field'><Text className='field-label'>备注</Text><Textarea className='form-input trip-note-input' value={value.detail} maxlength={5000} placeholder='添加玩法、交通或提醒' onInput={(e) => setValue({ ...value, detail: e.detail.value })} /></View>
-    {error && <Text className='form-error'>{error}</Text>}
     {existing && !trip.sample && <View className='form-field'>
       <Button className='secondary-button' onClick={() => store.setActivityLocked(trip.id, day, index, !existing.locked)}>{existing.locked ? '解除活动锁定' : '锁定活动'}</Button>
       <Text className='note'>{existing.locked ? '已锁定。AI 调整时会保留该活动。' : '已预约或不想改的安排可以锁定。'}</Text>
     </View>}
     {existing && <View className='button-row'><Button className='text-button' disabled={index === 0} onClick={() => { store.moveActivity(trip.id, day, index, -1); onClose(); }}>上移</Button><Button className='text-button' disabled={index === trip.days[day].length - 1} onClick={() => { store.moveActivity(trip.id, day, index, 1); onClose(); }}>下移</Button></View>}
-    <View className='button-row'>{existing && <Button className='secondary-button' onClick={() => void remove()}>删除这项</Button>}<Button className='primary-button' onClick={save}>保存安排</Button></View>
+    {existing && <Button className='text-button danger' onClick={() => void remove()}>删除这项安排</Button>}
   </Sheet>;
 }
 

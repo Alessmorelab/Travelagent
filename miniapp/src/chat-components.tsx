@@ -64,10 +64,10 @@ export function ChatMessage({ message, state, latest }: { message: Message; stat
     try { store.saveAssistantTrip(message, destination); setSaving(false); goTab('trips'); }
     catch (error) { setSaveError((error as Error).message); }
   };
-  if (message.role === 'user') return <View className='dialogue-message user'><Text className='user-message-text' selectable>{message.content}</Text></View>;
+  if (message.role === 'user') return <View className='dialogue-message user'><Text className='question-byline'>我的提问</Text><Text className='user-message-text' selectable>{message.content}</Text></View>;
   const interrupted = message.status === 'interrupted';
   return <View className='dialogue-message assistant'>
-    <View className='assistant-identity'><View className='assistant-mark'>✦</View><Text>远行</Text>
+    <View className='assistant-identity'><Text className='assistant-mark'>R</Text><Text className='reply-byline'>远行笔记</Text><Text className='reply-imprint'>FIELD NOTES</Text>
       {message.mode === 'demo' && <Text className='message-mode'>示例</Text>}
     </View>
     {latest && state.busy && state.connectionStatus === 'reconnecting' && <Text className='note'>连接中断，正在恢复同一次回复…</Text>}
@@ -78,22 +78,29 @@ export function ChatMessage({ message, state, latest }: { message: Message; stat
     {message.status === 'streaming' && !!message.content && <Text className='stream-cursor'>▍</Text>}
     {interrupted && !!message.content && <Text className='reply-stopped'>回复未完成</Text>}
     {message.warnings?.some((warning) => warning.kind === 'unverified_detail') && <Text className='note'>部分具体信息已标注待确认，可查看查询依据。</Text>}
+    {itinerary && message.status !== 'streaming' && <View className='reply-itinerary'>
+      <View className='reply-itinerary-label'><Text className='folio-code'>ITINERARY</Text><Text>{itinerary.days.length} 天 · {itinerary.days.reduce((count, activities) => count + activities.length, 0)} 项安排</Text></View>
+      <Text className='reply-itinerary-title'>{itinerary.destination ? `${itinerary.destination}行程` : '按天行程'}</Text>
+      <View className='reply-itinerary-actions'>
+        <Button onClick={() => { store.openMap('message', message.id); goTab('trips'); }}>查看行程地图 ↗</Button>
+        <Button onClick={() => { setSaveError(''); setDestination(itinerary.destination); setSaving(true); }}>保存为行程</Button>
+      </View>
+    </View>}
     {message.status !== 'streaming' && <View className='message-actions'>
       {!!message.content && <Button className='message-action' onClick={copy} ariaLabel='复制回复'>复制</Button>}
       {message.mode === 'live' && !!message.content && <Button className='message-action' onClick={() => setShowSources(true)}>查询依据{sources.length ? ` · ${sources.length}` : ''}</Button>}
-      {itinerary && <Button className='message-action' onClick={() => { store.openMap('message', message.id); goTab('trips'); }}>查看行程地图</Button>}
-      {itinerary && <Button className='message-action' onClick={() => { setSaveError(''); setDestination(itinerary.destination); setSaving(true); }}>保存为行程</Button>}
       {latest && interrupted && !!state.lastQuery && <Button className='message-action' disabled={state.busy} onClick={() => sendQuery(state.lastQuery || '', true)}>恢复或重试</Button>}
       {latest && !state.busy && !!state.lastQuery && <Button className='message-action' onClick={() => sendQuery(state.lastQuery || '', 'regenerate')}>重新生成</Button>}
     </View>}
     {showSources && <QuerySources sources={sources} available={Array.isArray(message.sources)} onClose={() => setShowSources(false)} />}
-    {saving && itinerary && <Sheet title='保存行程草稿' onClose={() => setSaving(false)}>
+    {saving && itinerary && <Sheet title='保存行程草稿' folio='02  /  TRIP RECORD' onClose={() => setSaving(false)} footer={<>
+      {saveError && <Text className='form-error'>{saveError}</Text>}
+      <Button className='primary-button' onClick={save}>保存并查看行程</Button>
+    </>}>
       <Text className='sheet-description'>{message.mode === 'demo' ? '这是示例回复，保存后仍标记为示例。' : '请核对下方安排；原始回复会保存在草稿中。'} 日期、人数和预算暂不填入。</Text>
       <View className='form-field'><Text className='field-label'>目的地</Text><Input className='form-input' value={destination} maxlength={60} placeholder='请填写目的地' onInput={(event) => setDestination(event.detail.value)} /></View>
       {itinerary.days.map((day, index) => <View className='import-day' key={index}><Text>第 {index + 1} 天</Text>{day.map((activity, i) => <Text key={i}>{activity.time} · {activity.title}{activity.detail ? `\n${activity.detail}` : ''}</Text>)}</View>)}
       {itinerary.notes && <View className='import-day'><Text>其他信息</Text><Text>{itinerary.notes}</Text></View>}
-      {saveError && <Text className='form-error'>{saveError}</Text>}
-      <Button className='primary-button' onClick={save}>保存并查看行程</Button>
     </Sheet>}
   </View>;
 }

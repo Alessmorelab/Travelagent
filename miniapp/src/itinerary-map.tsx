@@ -134,22 +134,28 @@ export function ItineraryMap({ state, kind, id, days, destination, onClose, samp
   const markers = activities.flatMap((item, index) => selectionDay === dayKey && chosen[index] && !excluded.includes(index) ? [{ id: index + 1,
     latitude: chosen[index]!.latitude, longitude: chosen[index]!.longitude, title: `${index + 1}. ${chosen[index]!.name}`,
     iconPath: '/assets/tabs/map-active.png', width: 28, height: 28 }] : []);
-  const center = selected !== null && chosen[selected] ? chosen[selected] : markers[0];
+  const center = markers.find((marker) => marker.id === (selected ?? -1) + 1) || markers[0];
   const polyline = (selectionDay === dayKey ? legs : []).filter((leg) => !leg.failure && leg.points).map((leg) => ({ points: leg.points!, color: '#376654', width: 5, arrowLine: true }));
   const open = (place: MapPlace) => { void Taro.openLocation({ latitude: place.latitude, longitude: place.longitude, name: place.name, address: place.address }).catch(() => setError('暂时无法打开位置，请检查微信权限或稍后重试')); };
 
   return <View className='page itinerary-map-page'>
-    <View className='place-map-heading'><Button className='text-button' onClick={onClose}>← 返回</Button><Text>行程地图</Text></View>
+    <View className='route-mast'><Text className='folio-code'>02  /  ROUTE ATLAS</Text><Button className='atlas-link' onClick={onClose}>← 返回</Button></View>
+    <View className='route-heading'><Text className='route-title'>行程地图</Text><Text className='route-page-no'>DAY {String(day + 1).padStart(2, '0')}</Text></View>
     <ScrollView scrollX className='day-tabs'>{days.map((_, index) => <View key={index} className={`day-tab ${day === index ? 'active' : ''}`} onClick={() => setDay(index)}><Text>DAY {String(index + 1).padStart(2, '0')}</Text></View>)}</ScrollView>
-    <View className='form-field'><Text className='field-label'>所在城市</Text><Input className='form-input' value={city} maxlength={50} placeholder='请填写行程所在城市' onInput={(event) => { searchGeneration.current++; searchControl.current?.abort(); setSearching(false); setCity(event.detail.value); }} /></View>
-    <Button className='secondary-button' loading={searching} disabled={searching || !allowed} onClick={() => void search()}>查询当天地点</Button>
-    <Text className='note'>首次查看请查询地点；同名或相似地点需核对地址后选择。路线按当前顺序计算，耗时仅为查询时估算。</Text>
+    <View className='route-plate'>
+      {center ? <NativeMap className='place-map' latitude={center.latitude} longitude={center.longitude} markers={markers} polyline={polyline}
+        includePoints={markers.map(({ latitude, longitude }) => ({ latitude, longitude }))} scale={12}
+        onMarkerTap={(event) => setSelected(Number(event.detail.markerId) - 1)} onError={() => setError('地图加载失败，请检查网络或微信开发者工具')} />
+        : <View className='route-frontispiece'><Text>{sample ? '示例行程' : searching ? '正在查询地点…' : '等待地点确认'}</Text><Text>{sample ? '可切换日期，浏览当天的站点' : '确认地点后，在此查看地图'}</Text></View>}
+      <View className='route-key'><Text>第 {day + 1} 天 · {activities.length} 项安排</Text><Text>已标记 {markers.length} 处</Text></View>
+    </View>
+    {allowed && <><Text className='field-label'>所在城市</Text>
+    <View className='route-lookup'><Input className='form-input' value={city} maxlength={50} placeholder='填写行程所在城市' onInput={(event) => { searchGeneration.current++; searchControl.current?.abort(); setSearching(false); setCity(event.detail.value); }} />
+      <Button className='primary-button' loading={searching} disabled={searching} onClick={() => void search()}>查询当天地点</Button></View></>}
     {(days[day]?.length || 0) > 12 && <Text className='note'>当前显示前12项安排，请拆分较长的行程。</Text>}
-    {!allowed && <Text className='form-error'>{sample ? '这是示例行程，未查询真实地点和路线。' : '请先连接真实服务。'}</Text>}
+    {!allowed && !sample && <Text className='note'>连接真实服务后可查询地点与路线。</Text>}
     {error && <Text className='form-error'>{error}</Text>}
-    {center && <NativeMap className='place-map' latitude={center.latitude} longitude={center.longitude} markers={markers} polyline={polyline}
-      includePoints={markers.map(({ latitude, longitude }) => ({ latitude, longitude }))} scale={12}
-      onMarkerTap={(event) => setSelected(Number(event.detail.markerId) - 1)} onError={() => setError('地图加载失败，请检查网络或微信开发者工具')} />}
+    {(allowed || !!legs.length) && <><View className='atlas-section'><Text>路段与交通</Text><Text className='folio-code'>TRANSIT</Text></View>
     <View className='map-mode-options'>{modes.map((item) => <Button key={item.id} className={`map-mode ${mode === item.id ? 'active' : ''}`} onClick={() => setMode(item.id)}>{item.label}</Button>)}</View>
     {routing && <Text className='note'>正在查询实际路线…</Text>}
     {!ready && <Text className='note'>至少确认两个地点后显示路线；休息等安排可选择“不显示在地图”。</Text>}
@@ -159,9 +165,14 @@ export function ItineraryMap({ state, kind, id, days, destination, onClose, samp
       <Text>{leg.failure ? leg.failure.message : `${((leg.distance_m || 0) / 1000).toFixed(1)} 公里 · 预计 ${Math.ceil((leg.duration_seconds || 0) / 60)} 分钟`}</Text>
       {!leg.failure && <Text className='muted'>来源：{leg.source} · {leg.retrieved_at}</Text>}
     </View>)}
-    {legs.some((leg) => leg.failure) && <Button className='text-button' disabled={routing} onClick={() => void calculate(true)}>仅重试失败路段</Button>}
+    {legs.some((leg) => leg.failure) && <Button className='text-button' disabled={routing || !allowed} onClick={() => void calculate(true)}>仅重试失败路段</Button>}</>}
+    <View className='atlas-section'><Text>当天站点</Text><Text className='folio-code'>STOP INDEX</Text></View>
+    <Text className='sheet-description'>{sample ? '以下为示例安排，未查询实际位置或路线。' : '同名地点请先核对地址，再选择对应的一项。'}</Text>
     {activities.map((activity, index) => <View key={`${day}-${index}-${activity.title}`} className={`map-stop ${selected === index ? 'selected' : ''}`}>
-      <Text className='map-stop-title' onClick={() => setSelected(index)}>{index + 1}. {activity.time} · {activity.title}</Text>
+      <Button className='stop-heading' onClick={() => setSelected(index)}>
+        <Text className='stop-number'>{String(index + 1).padStart(2, '0')}</Text>
+        <View><Text className='stop-time'>{activity.time} · {excluded.includes(index) ? '已隐藏' : chosen[index] ? '已确认' : '待核对'}</Text><Text className='map-stop-title'>{activity.title}</Text></View>
+      </Button>
       {activity.groupTitle && <Text className='note'>同一时段：{activity.groupTitle}</Text>}
       {activity.alternatives?.length && !chosen[index] && !excluded.includes(index) ? <View><Text className='note'>请从以下安排中选择一项，再核对具体地点。</Text>{activity.alternatives.map((name) => <Button key={name} className='map-candidate' disabled={searching || !allowed} onClick={() => { setOptions((previous) => ({ ...previous, [index]: name })); void search(false, { index, query: name }); }}>{name}</Button>)}</View> : null}
       {chosen[index] && !excluded.includes(index) ? <><Text>{chosen[index]!.address || '地址未提供'}</Text><Text className='muted'>来源：{chosen[index]!.source} · {chosen[index]!.retrieved_at}</Text>

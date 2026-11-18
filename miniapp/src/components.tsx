@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, ReactNode } from 'react';
 import Taro from '@tarojs/taro';
 import { Button, Image, Input, Picker, ScrollView, Text, View } from '@tarojs/components';
 import { DESTINATIONS, AGENTS } from './domain/travel.mjs';
@@ -53,12 +53,24 @@ export function Scenic({ destination, className = '', children }: PropsWithChild
 export function DestinationCard({ destination, state, onClick }: { destination: Destination; state: State; onClick: () => void }) {
   return <View className='destination-card'><View onClick={onClick}><Scenic destination={destination} className='destination-image'><Text className='small-tag'>{destination.tag}</Text></Scenic><View className='destination-heading'><Text>{destination.name}</Text><Text className='country'>{destination.country}</Text></View><Text className='destination-subtitle'>{destination.subtitle}</Text></View><FavoriteButton destination={destination} state={state} /></View>;
 }
-export function Sheet({ title, onClose, children }: PropsWithChildren<{ title: string; onClose: () => void }>) {
+export function Sheet({ title, folio = 'ROAM  /  FIELD ATLAS', footer, onClose, children }: PropsWithChildren<{
+  title: string; folio?: string; footer?: ReactNode; onClose: () => void;
+}>) {
   useEffect(() => {
     void Taro.hideTabBar({ animation: false }).catch(() => {});
     return () => { void Taro.showTabBar({ animation: false }).catch(() => {}); };
   }, []);
-  return <View className='sheet-backdrop' onClick={onClose}><View className='sheet' onClick={(event) => event.stopPropagation()}><View className='sheet-handle' /><View className='sheet-header'><Text>{title}</Text><Button className='sheet-close' onClick={onClose} ariaLabel='关闭弹窗'>×</Button></View><ScrollView scrollY className='sheet-scroll' enhanced><View className='sheet-content'>{children}</View></ScrollView></View></View>;
+  return <View className='sheet-backdrop' onClick={onClose}>
+    <View className='sheet' onClick={(event) => event.stopPropagation()}>
+      <View className='sheet-handle' />
+      <View className='sheet-header'>
+        <View className='sheet-heading'><Text className='folio-code'>{folio}</Text><Text className='sheet-title'>{title}</Text></View>
+        <Button className='sheet-close' onClick={onClose} ariaLabel='关闭弹窗'>×</Button>
+      </View>
+      <ScrollView scrollY className='sheet-scroll' enhanced><View className='sheet-content'>{children}</View></ScrollView>
+      {footer && <View className='sheet-footer'>{footer}</View>}
+    </View>
+  </View>;
 }
 export function DestinationSheet({ id, state, onClose }: { id: string; state: State; onClose: () => void }) {
   const d = DESTINATIONS.find((item) => item.id === id);

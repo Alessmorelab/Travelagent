@@ -48,7 +48,7 @@ export function formatAssistantMessage(content) {
       const rows = []; index += 2;
       for (; index < lines.length && lines[index].includes('|') && lines[index].trim(); index++) rows.push(cells(lines[index]));
       index--;
-      const cell = (value, tag) => `<${tag} style="border:1px solid #dfe5d8;padding:8px;text-align:left;vertical-align:top;word-break:break-word;">${inline(value)}</${tag}>`;
+      const cell = (value, tag) => `<${tag} style="${tag === 'th' ? 'background:#e4eadc;color:#183f3c;' : ''}border:1px solid #c9cec0;padding:8px;text-align:left;vertical-align:top;word-break:break-word;">${inline(value)}</${tag}>`;
       blocks.push(`<table style="border-collapse:collapse;width:100%;table-layout:fixed;margin:12px 0;font-size:13px;"><thead><tr>${header.map((value) => cell(value, 'th')).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${header.map((_, i) => cell(row[i] || '', 'td')).join('')}</tr>`).join('')}</tbody></table>`);
       continue;
     }
@@ -56,7 +56,7 @@ export function formatAssistantMessage(content) {
     const item = /^\s*(?:([-*+])\s+|(\d+)[.)、]\s+)(.+)$/.exec(line);
     if (heading) {
       flushParagraph(); flushList();
-      blocks.push(`<h3 style="font-size:17px;line-height:1.6;margin:18px 0 8px;font-weight:600;">${inline(heading[2])}</h3>`);
+      blocks.push(`<h3 style="font-family:'Songti SC',serif;font-size:${heading[1].length <= 2 ? 20 : 17}px;line-height:1.5;margin:18px 0 8px;color:#183f3c;font-weight:600;">${inline(heading[2])}</h3>`);
     } else if (item) {
       flushParagraph();
       const tag = item[1] ? 'ul' : 'ol';
@@ -65,7 +65,7 @@ export function formatAssistantMessage(content) {
       listTag = tag; list.push(item[3]);
     } else if (/^\s*>\s?/.test(line)) {
       flushParagraph(); flushList();
-      blocks.push(`<blockquote style="border-left:3px solid #cbd7c6;padding-left:10px;margin:10px 0;color:#75806f;">${inline(line.replace(/^\s*>\s?/, ''))}</blockquote>`);
+      blocks.push(`<blockquote style="border-left:3px solid #ad462c;padding:6px 10px;margin:10px 0;background:#f3edde;color:#40554b;">${inline(line.replace(/^\s*>\s?/, ''))}</blockquote>`);
     } else if (/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line)) {
       flushParagraph(); flushList(); blocks.push('<hr style="border:0;border-top:1px solid #e4e8dc;margin:16px 0;"/>');
     } else if (!line.trim()) { flushParagraph(); flushList(); }
