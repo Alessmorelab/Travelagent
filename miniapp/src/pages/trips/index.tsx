@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import Taro, { useDidShow } from '@tarojs/taro';
 import { Button, Input, Map, ScrollView, Text, Textarea, View } from '@tarojs/components';
-import { DESTINATIONS, dayCount, formatDate } from '../../domain/travel.mjs';
+import { dayCount, formatDate } from '../../domain/travel.mjs';
 import type { Activity, State, Trip } from '../../domain/travel.mjs';
-import { Empty, Icon, PageHeading, PreferenceSheet, Scenic, Sheet, Toast } from '../../components';
+import { Empty, Icon, PageHeading, PreferenceSheet, Sheet, Toast } from '../../components';
 import { QuerySources } from '../../chat-components';
 import { readSources } from '../../domain/query-sources.mjs';
 import { TripDetailsSheet } from '../../trip-details-sheet';
@@ -90,7 +90,6 @@ export default function TripsPage() {
   const [mapOpen, setMapOpen] = useState(false);
   useDidShow(() => { const id = store.getState().focusTripId; if (id) { setSelectedId(id); store.clearTripFocus(); } });
   const trip = state.trips.find((item) => item.id === selectedId) || state.trips[0];
-  const destination = DESTINATIONS.find((item) => item.id === trip?.destinationId);
   const day = Math.max(0, Math.min(state.activeDay, (trip?.days.length || 1) - 1));
   const copy = async () => {
     if (!trip) return;
@@ -117,15 +116,19 @@ export default function TripsPage() {
   if (mapTarget && (mapTrip || mapItinerary)) return <><Toast state={state} /><ItineraryMap key={`${mapTarget.kind}-${mapTarget.id}`} state={state} kind={mapTarget.kind} id={mapTarget.id}
     days={(mapTrip || mapItinerary)!.days} destination={(mapTrip || mapItinerary)!.destination} sample={mapTrip?.sample || mapMessage?.mode === 'demo'} onClose={() => store.closeMap()} /></>;
   if (mapOpen) return <><Toast state={state} /><PlaceMapView state={state} initialCity={trip?.destination || ''} onClose={() => setMapOpen(false)} /></>;
-  return <View className='page'><Toast state={state} /><PageHeading en='MY JOURNEYS' title='我的行程' subtitle='把期待，变成出发。' action={create} /><Button className='text-button' onClick={() => setMapOpen(true)}>⌖ 地点地图</Button>
+  return <View className='page'><Toast state={state} /><PageHeading en='02  /  ITINERARY' title='行程手册' subtitle={`共 ${state.trips.length} 份行程`} action={create} />
+    <Button className='atlas-explore map-directory' onClick={() => setMapOpen(true)}><Text>地点地图</Text><Text>按城市查找 ↗</Text></Button>
     {!trip ? <Empty icon='map' title='下一站，还在等你' description='创建一份行程草稿，慢慢填满旅途的每一天。' action='新建行程' onClick={create} /> : <>
       {state.trips.length > 1 && <ScrollView scrollX className='trip-select'>{state.trips.map((item) => <Button key={item.id} className={item.id === trip.id ? 'active' : ''} onClick={() => { setSelectedId(item.id); store.setActiveDay(0); }}>{item.title}</Button>)}</ScrollView>}
-      <Scenic destination={destination} className='trip-cover'><View className='trip-cover-copy'><Text className='trip-status'>{trip.sample ? '示例行程 · 待核对' : '行程草稿 · 待完善'}</Text><Text className='trip-title'>{trip.title}</Text><Text>{trip.startDate ? `${formatDate(trip.startDate)} — ${formatDate(trip.endDate)}` : '日期待填写'} · {trip.travelers ? `${trip.travelers}人同行` : '人数待填写'}</Text></View></Scenic>
-      <Button className='text-button' onClick={() => setDetailsOpen(true)}>编辑日期、人数与预算 →</Button>
-      <View className='budget-strip'><View><Text className='muted'>{trip.sample ? '示例总预算' : '计划总预算'}</Text><Text className='budget-number'>{trip.budget ? `¥ ${trip.budget.toLocaleString()}` : '待填写'}</Text></View><View className='budget-right'><Text>{dayCount(trip)}天 {Math.max(0, dayCount(trip) - 1)}晚</Text><Text className='muted'>实际费用以预订时为准</Text></View></View>
+      <View className='trip-cover'><View className='trip-cover-copy'><Text className='trip-status'>{trip.sample ? '示例行程' : '行程草稿'}</Text><Text className='trip-title'>{trip.title}</Text><Text>{trip.startDate ? `${formatDate(trip.startDate)} — ${formatDate(trip.endDate)}` : '日期待填写'} · {trip.travelers ? `${trip.travelers}人同行` : '人数待填写'}</Text></View></View>
+      <View className='ticket-stub'>
+        <View><Text className='atlas-label'>{trip.sample ? '示例总预算' : '计划总预算'}</Text><Text className='ticket-value'>{trip.budget ? `¥ ${trip.budget.toLocaleString()}` : '待填写'}</Text></View>
+        <View><Text className='atlas-label'>行程天数</Text><Text className='ticket-value'>{dayCount(trip)} 天</Text></View>
+        <Button className='atlas-link' onClick={() => setDetailsOpen(true)} ariaLabel='编辑日期、人数与预算'>编辑行程 ↗</Button>
+      </View>
+      <View className='atlas-section'><Text>每日路线</Text><Button className='atlas-link' onClick={() => store.openMap('trip', trip.id)}>查看行程地图 ↗</Button></View>
       <ScrollView scrollX className='day-tabs'>{trip.days.map((_, index) => { let label = '日期待定'; if (trip.startDate) { const date = new Date(`${trip.startDate}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + index); label = formatDate(date.toISOString().slice(0, 10)); } return <View key={index} className={`day-tab ${day === index ? 'active' : ''}`} onClick={() => store.setActiveDay(index)}><Text>DAY {String(index + 1).padStart(2, '0')}</Text><Text>{label}</Text></View>; })}</ScrollView>
       <View className='timeline'>{trip.days[day].map((activity, index) => { const key = `${day}-${index}`; const done = trip.completed.includes(key); return <View key={key} className={`timeline-item ${done ? 'done' : ''}`}><View className='timeline-icon'><Icon name={activity.icon} /></View><View className='timeline-copy' onClick={() => setEditIndex(index)}><Text className='timeline-time'>{activity.time}{activity.locked ? ' · 已锁定' : ''}</Text><Text className='timeline-title'>{activity.title}</Text><Text className='timeline-description'>{activity.detail}</Text><Text className='activity-edit-hint'>点击编辑</Text></View><Button className={`activity-check ${done ? 'checked' : ''}`} ariaLabel={`${done ? '标记未完成' : '标记完成'}：${activity.title}`} onClick={() => store.toggleActivity(trip.id, key)}>{done ? '✓' : ''}</Button></View>; })}</View>
-      <Button className='text-button' onClick={() => store.openMap('trip', trip.id)}>⌖ 查看行程地图</Button>
       <Button className='text-button' onClick={() => setEditIndex(-1)}>＋ 添加当天安排</Button>
       {!trip.sample && <View className='button-row'><Button className='secondary-button' onClick={plan}>AI 调整当天</Button>
         {store.canUndoDayAdjustment(trip.id, day) && <Button className='text-button' onClick={() => {

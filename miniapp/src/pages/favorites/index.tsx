@@ -46,18 +46,30 @@ export default function FavoritesPage() {
   const selected = state.savedPlaces.find((place) => place.id === adding);
   return <View className='page'>
     <Toast state={state} />
-    <PageHeading en='PLACES TO KEEP' title='我的收藏' subtitle='保存实际查到的地点，慢慢安排下一次出发。' />
+    <PageHeading en='03  /  PLACE INDEX' title='地点收藏册' subtitle='查过的地点，想去的目的地。' />
     <View className='saved-place-tabs'><Button className={tab === 'places' ? 'active' : ''} onClick={() => setTab('places')}>地点收藏 · {state.savedPlaces.length}</Button><Button className={tab === 'inspiration' ? 'active' : ''} onClick={() => setTab('inspiration')}>灵感目的地 · {state.favorites.length}</Button></View>
     {tab === 'places' ? <>
-      <Input className='form-input saved-place-search' value={query} maxlength={100} placeholder='按地点名称、地址或城市筛选' onInput={(e) => setQuery(e.detail.value)} />
+      {!!state.savedPlaces.length && <Input className='form-input saved-place-search' value={query} maxlength={100} placeholder='按地点名称、地址或城市筛选' onInput={(e) => setQuery(e.detail.value)} />}
       {saved.map((place) => <View className='saved-place-card' key={place.id}>
         <Text className='saved-place-title'>{place.name}</Text><Text>{place.address || '地址未提供'}</Text>
         {!!place.city && <Text className='muted'>{place.city}</Text>}
         <Text className='muted'>来源：{place.source} · 上次查询：{place.retrieved_at}</Text>
         <View className='saved-place-actions'><Button className='text-button' onClick={() => open(place)}>打开位置</Button><Button className='text-button' onClick={() => setAdding(place.id)}>加入行程</Button><Button className='text-button danger' onClick={() => store.removeSavedPlace(place.id)}>移除收藏</Button></View>
       </View>)}
-      {!saved.length && (state.savedPlaces.length ? <View className='empty'><Text className='empty-title'>没有符合筛选条件的地点</Text><Button className='text-button' onClick={() => setQuery('')}>清除筛选</Button></View> : <Empty icon='bookmark' title='把想去的地点存下来' description='在地点搜索或行程地图中，确认地点后点「收藏地点」，以后可以直接加入行程。' action='去地图找地点' onClick={() => goTab('trips')} />)}
+      {!saved.length && (state.savedPlaces.length ? <View className='empty'><Text className='empty-title'>没有符合筛选条件的地点</Text><Button className='text-button' onClick={() => setQuery('')}>清除筛选</Button></View> : <View className='index-sheet'>
+        <View className='index-map'><View className='map-fold fold-one' /><View className='map-fold fold-two' /><View className='map-fold fold-three' /><View className='index-pin' /></View>
+        <Text className='atlas-imprint'>PLACE COLLECTION  /  00</Text>
+        <Text className='index-heading'>收藏第一个地点</Text><Text className='index-description'>在行程地图上确认地点后，点「收藏地点」，就能在这里找到它。</Text>
+        <Button className='primary-button' onClick={() => goTab('trips')}>打开行程 →</Button>
+      </View>)}
       {!!saved.length && <Text className='note'>地点保存在此设备，开放时间与可用性请在出行前重新确认。</Text>}
+      {!state.savedPlaces.length && !!state.favorites.length && <View>
+        <View className='atlas-section'><Text>已收藏的灵感</Text><Button className='atlas-link' onClick={() => setTab('inspiration')}>查看全部 ↗</Button></View>
+        {DESTINATIONS.filter((item) => state.favorites.includes(item.id)).slice(0, 2).map((item, index) =>
+          <Button key={item.id} className='index-entry' onClick={() => setDetail(item.id)}>
+            <Text className='index-number'>0{index + 1}</Text><Text className='index-name'>{item.name}</Text><Text className='index-meta'>{item.country} · {item.category}</Text><Text>↗</Text>
+          </Button>)}
+      </View>}
     </> : <>
       <Text className='note'>以下为旅行灵感内容和示例预算，可收藏作参考。</Text>
       {browsing && <Button className='text-button' onClick={() => setBrowsing(false)}>← 返回已收藏的灵感</Button>}<Filters state={state} />

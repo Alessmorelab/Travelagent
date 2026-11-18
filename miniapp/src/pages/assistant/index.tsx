@@ -33,7 +33,7 @@ export default function AssistantPage() {
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messages = state.messages.filter((message) => message.agent === state.agent);
   const last = messages.at(-1);
-  const title = messages.find((message) => message.role === 'user')?.content || '新对话';
+  const title = messages.find((message) => message.role === 'user')?.content || '远行 · 旅行助手';
   const conversationId = state.activeChats[state.agent] || state.agent;
 
   useShareAppMessage(() => ({ title: '远行 AI · 一起聊聊你的下一站', path: '/pages/assistant/index' }));
@@ -89,12 +89,15 @@ export default function AssistantPage() {
       <View className='conversation-content'>
         {!state.hydrated ? <Text className='loading-text'>正在打开对话…</Text> : messages.length ? messages.map((message, index) =>
           <ChatMessage key={message.id} message={message} state={state} latest={index === messages.length - 1} />)
-          : <View className='dialogue-welcome'>
-            <View className='welcome-mark'>✦</View><Text className='dialogue-welcome-title'>下一站，想去哪儿？</Text>
-            <Text className='dialogue-welcome-description'>说出你的想法，我们一起把旅行计划聊具体。</Text>
+          : <View className='atlas-welcome'>
+            <View className='atlas-cover'>
+              <Text className='atlas-imprint'>ROAM  /  FIELD ATLAS</Text>
+              <Text className='atlas-cover-title'>下一站，{ '\n' }想去哪儿？</Text>
+              <View className='atlas-caption'><Text>图版 01 · 山间河谷</Text><Text>ALPINE PASS</Text></View>
+            </View>
+            <View className='atlas-section'><Text>从一个问题出发</Text><Button className='atlas-link' onClick={() => setStarterPage((page) => (page + 1) % 2)}>换一组 ↻</Button></View>
             <View className='conversation-starters'>{starters.slice(starterPage * 4, starterPage * 4 + 4).map((item) => <Button className='conversation-starter' key={item.title} onClick={() => send(item.query)}><Text className='starter-symbol'>{item.icon}</Text><Text>{item.title}</Text><Text className='starter-arrow'>↗</Text></Button>)}</View>
-            <Button className='starter-refresh' onClick={() => setStarterPage((page) => (page + 1) % 2)}>换一换 ↻</Button>
-            <Button className='inspiration-link' onClick={() => openPanel('explore')}>还没想好？找点旅行灵感 →</Button>
+            <Button className='atlas-explore' onClick={() => openPanel('explore')}><Text>目的地灵感</Text><Text>翻开图册 ↗</Text></Button>
           </View>}
         {state.error && <View className='dialogue-error'><Text>{state.error}</Text><View className='dialogue-error-actions'>
           <Button onClick={() => { scrollToLatest(); sendQuery(state.lastQuery || '', true); }}>重试</Button>

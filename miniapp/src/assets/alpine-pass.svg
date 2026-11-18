@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 320">
+  <defs>
+    <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(27)">
+      <path d="M0 0v7" stroke="#e5edcf" opacity=".32" stroke-width="2"/>
+    </pattern>
+    <path id="peak" d="m260 189 79-70 33 18 79-88 17 8 42-46 113 112 43-44 94 67v82H260z"/>
+    <path id="pines" d="m0 0-5 16h3l-6 14h5l-8 16H-2v6h4v-6h9l-8-16h5l-6-14h3z"/>
+  </defs>
+  <path fill="#eee6ce" d="M0 0h760v320H0z"/>
+  <circle cx="640" cy="53" r="35" fill="#dc6944"/>
+  <g fill="none" stroke="#c0bca6" opacity=".58"><path d="M0 58q120 10 248-13t192-16M0 70q120 8 248-15t175-18M0 83q120 3 248-18t163-18"/></g>
+  <path d="m0 191 131-35 46-32 43 12 50-45 54 47 32-2 92 66H0z" fill="#b5bca3"/>
+  <use href="#peak" fill="#729084"/>
+  <path d="m349 146 102-97 17 8 42-46-19 58 10-6-28 42 7-18-20 19 5-30-17 13 6-24-33 38-11-1z" fill="#f6efd8"/>
+  <path d="m510 11 113 112-62-37-19-30 2 20-27-42-13 14z" fill="#405f5a"/>
+  <path d="m514 27 86 108-57-52-27-44-19 31z" fill="url(#hatch)"/>
+  <path d="m566 178 100-99 94 67v54z" fill="#567566"/>
+  <path d="m617 134 49-55 23 18-20-5-16 21 5-15z" fill="#eee4cb"/>
+  <path d="M0 149q74-16 141 13t144 23q66-12 122 8 64 11 125-20 92-48 228 7v140H0z" fill="#8fada0"/>
+  <path d="M0 181q104-37 211 8t198 30q106-19 166-13 94 11 185-16v130H0z" fill="#4d8076"/>
+  <path d="M158 320q49-39 141-43t85-20q0-7-43-12t-31-17q13-11 88-16-59 9-65 16-3 6 42 11 86 9 62 27-16 11-73 19-81 13-82 35z" fill="#e8d3a6"/>
+  <path d="M0 235q80-27 147-13t129 28q-74 2-90 15-35 18-79 55H0z" fill="#2c5d54"/>
+  <path d="M365 320q70-34 116-66t129-28q81-1 150-39v133z" fill="#254e49"/>
+  <g fill="#163e39">
+    <use href="#pines" transform="translate(23 167) scale(1.65)"/><use href="#pines" transform="translate(52 189) scale(1.06)"/>
+    <use href="#pines" transform="translate(13 202) scale(.9)"/><use href="#pines" transform="translate(85 200) scale(.63)"/>
+    <use href="#pines" transform="translate(696 159) scale(1.1)"/><use href="#pines" transform="translate(729 126) scale(1.75)"/>
+    <use href="#pines" transform="translate(757 147) scale(1.52)"/>
+  </g>
+  <g fill="none" stroke="#95ae94" opacity=".55"><path d="M441 307q74-72 159-62t160-37M463 312q65-60 145-54t152-34M494 316q51-46 124-44t142-30M527 319q48-33 99-34t134-27"/></g>
+</svg>

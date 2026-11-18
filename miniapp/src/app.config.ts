@@ -2,13 +2,13 @@ export default defineAppConfig({
   pages: ['pages/assistant/index', 'pages/trips/index', 'pages/favorites/index', 'pages/profile/index'],
   window: {
     navigationBarTitleText: '远行 Roam',
-    navigationBarBackgroundColor: '#f8f7f2',
+    navigationBarBackgroundColor: '#f7f4eb',
     navigationBarTextStyle: 'black',
-    backgroundColor: '#f8f7f2',
+    backgroundColor: '#f7f4eb',
     backgroundTextStyle: 'dark'
   },
   tabBar: {
-    color: '#929b87', selectedColor: '#263e34', backgroundColor: '#fcfcf8', borderStyle: 'white',
+    color: '#596b60', selectedColor: '#183f3c', backgroundColor: '#f7f4eb', borderStyle: 'white',
     list: [
       { pagePath: 'pages/assistant/index', text: '助手', iconPath: 'assets/tabs/compass.png', selectedIconPath: 'assets/tabs/compass-active.png' },
       { pagePath: 'pages/trips/index', text: '行程', iconPath: 'assets/tabs/map.png', selectedIconPath: 'assets/tabs/map-active.png' },

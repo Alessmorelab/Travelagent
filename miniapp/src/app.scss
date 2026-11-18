@@ -1,9 +1,9 @@
-$paper: #f8f7f2;
-$ink: #263e34;
-$muted: #929b87;
-$orange: #cb7651;
-$line: #e4e8dc;
-$sage: #e9ede3;
+$paper: #f7f4eb;
+$ink: #183f3c;
+$muted: #596b60;
+$orange: #ad462c;
+$line: #d4d7c8;
+$sage: #e4eadc;
 $white: #fffefa;
 
 page { background: $paper; color: $ink; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 26px; }
@@ -127,8 +127,8 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .trip-select { white-space: nowrap; margin: 0 0 26px; }
 .trip-select button { display: inline-block; padding: 14px 20px; font-size: 21px; border-radius: 32px; border: 2px solid $line; margin-right: 13px; }
 .trip-select button.active { color: #fff; background: $ink; border-color: $ink; }
-.trip-cover { height: 350px; }
-.trip-cover-copy { position: absolute; left: 32px; right: 32px; bottom: 32px; color: #fff; }
+.trip-cover { display: flex; align-items: flex-end; min-height: 250px; background: #234e48 url('./assets/route-print.svg') center / cover no-repeat; border-radius: 14px 14px 0 0; }
+.trip-cover-copy { padding: 28px 32px; color: #fff7df; max-width: 100%; overflow-wrap: anywhere; }
 .trip-cover-copy > text { display: block; font-size: 22px; }
 .trip-cover-copy .trip-status { display: inline-block; font-size: 18px; border: 1px solid rgba(255, 255, 255, .65); border-radius: 8px; padding: 6px 10px; }
 .trip-cover-copy .trip-title { font-family: 'Songti SC', serif; font-size: 43px; font-weight: 500; margin: 15px 0 16px; }
@@ -249,17 +249,20 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .conversation-scroll { flex: 1; min-height: 0; height: 0; width: 100%; }
 .conversation-content { padding: 26px 34px 0; }
 .conversation-end { height: 38px; }
-.dialogue-welcome { padding: 70px 8px 30px; display: flex; align-items: center; flex-direction: column; text-align: center; }
-.welcome-mark { width: 100px; height: 100px; border-radius: 32px; background: $sage; color: $ink; font-size: 65px; display: flex; align-items: center; justify-content: center; margin-bottom: 34px; }
-.dialogue-welcome-title { display: block; font-size: 43px; font-weight: 600; letter-spacing: 1px; line-height: 1.5; }
-.dialogue-welcome-description { display: block; font-size: 24px; line-height: 1.9; color: #899184; margin: 18px 0 38px; max-width: 540px; }
+.atlas-cover { position: relative; overflow: hidden; border-radius: 12px; height: 314px; background: linear-gradient(105deg, rgba(245,237,214,.88), transparent 48%), #eee6ce url('./assets/alpine-pass.svg') center / cover no-repeat; padding: 24px 30px; }
+.atlas-imprint, .atlas-label, .passport-mast { font-size: 20px; font-weight: 600; letter-spacing: 2px; }
+.atlas-imprint { display: block; color: #354f46; }
+.atlas-cover-title { display: block; margin-top: 10px; white-space: pre-line; font: 600 52px/1.13 'Songti SC', 'Noto Serif CJK SC', serif; color: #143b36; }
+.atlas-caption { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; padding: 11px 24px; background: #183f3c; color: #f8efd6; font-size: 18px; letter-spacing: 2px; }
+.atlas-section, .atlas-explore, .ticket-stub, .passport-mast, .passport-id { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.atlas-section { margin: 28px 0 18px; min-height: 56px; border-top: 2px solid $ink; padding-top: 14px; font: 600 32px/1.4 'Songti SC', serif; }
+.atlas-link { font: 500 22px/1.5 sans-serif; color: $orange; padding: 12px 0 12px 14px; }
+.atlas-explore { width: 100%; background: #e7ebde; padding: 22px 24px; margin: 20px 0; border-radius: 8px; font-weight: 600; text-align: left; }
+.atlas-explore > text:last-child { color: $muted; font-size: 22px; font-weight: 400; }
 .conversation-starters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 16px; }
-.conversation-starter { display: flex; align-items: flex-start; flex-direction: column; gap: 12px; text-align: left; padding: 22px; min-height: 132px; border: 2px solid $line; background: $white; border-radius: 22px; font-size: 23px; line-height: 1.5; }
-.conversation-starter:nth-child(even) { background: #f0f3f7; }
-.starter-refresh { color: #71836b; font-size: 22px; padding: 18px; margin-top: 10px; }
-.starter-symbol { width: 32px; font-size: 30px; color: #829574; }
-.starter-arrow { display: none; }
-.inspiration-link { font-size: 21px; color: $muted; margin-top: 18px; padding: 22px; }
+.conversation-starter { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 9px; text-align: left; padding: 15px 20px 18px; border: 2px solid $line; background: $white; border-radius: 8px; font-size: 25px; line-height: 1.45; }
+.starter-symbol { font-size: 28px; line-height: 1; color: $orange; }
+.starter-arrow { position: absolute; top: 12px; right: 18px; color: $muted; font-size: 22px; }
 .dialogue-message { margin: 12px 0 38px; }
 .dialogue-message.user { display: flex; justify-content: flex-end; margin: 4px 0 36px 50px; }
 .user-message-text { display: block; max-width: 100%; white-space: pre-wrap; word-break: break-word; background: #e8ede3; color: $ink; font-size: 27px; line-height: 1.8; border-radius: 25px 25px 7px 25px; padding: 21px 26px; }
@@ -348,3 +351,57 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .adjust-slot > text, .adjust-card > text { display: block; font-size: 25px; line-height: 1.7; overflow-wrap: anywhere; }
 .adjust-slot > text:last-child, .adjust-card > .muted { color: $muted; font-size: 21px; }
 .adjust-card > .adjust-new { color: $ink; font-weight: 600; margin-top: 18px; }
+
+.page-heading { padding-top: 0; border-top: 4px solid $ink; margin-bottom: 26px; }
+.page-heading .eyebrow { margin: 16px 0 8px; color: $orange; font-weight: 650; letter-spacing: 3px; }
+.page-title { font-size: 58px; line-height: 1.25; }
+.subtitle { margin-top: 8px; color: $muted; }
+.round-outline { background: $ink; color: $paper; border: 0; }
+.primary-button, .secondary-button, .form-input, .saved-place-card, .settings-group { border-radius: 10px; }
+.text-button, .progress-toggle, .message-action, .composer-hint { color: $muted; }
+.dialogue-header { background: $paper; padding: 4px 24px; }
+.dialogue-title { font-family: 'Songti SC', serif; font-size: 32px; }
+.dialogue-composer { border-color: #9ba99b; border-radius: 18px; }
+.dialogue-send { background: $orange; }
+.sheet { border-radius: 28px 28px 0 0; }
+.sheet-header > text { color: $ink; font-weight: 600; }
+.ticket-stub { padding: 24px; border: 2px solid $line; border-top: 2px dashed #9da592; background: $white; border-radius: 0 0 12px 12px; flex-wrap: wrap; }
+.atlas-label { display: block; color: $muted; letter-spacing: 0; font-weight: 400; }
+.ticket-value { display: block; font: 600 31px/1.5 Georgia, serif; }
+.day-tabs { margin-bottom: 22px; }
+.day-tab { border-radius: 7px; gap: 6px; padding: 14px 18px; margin-right: 10px; }
+.day-tab.active { border-bottom-color: #d9794e; }
+.timeline-icon { background: $sage; border: 2px solid #c8cfbf; }
+.timeline-time { color: $orange; font-weight: 600; }
+.saved-place-tabs { gap: 0; border-bottom: 2px solid $line; margin: 0 0 26px; }
+.saved-place-tabs > button { border: 0; border-bottom: 4px solid transparent; border-radius: 0; }
+.saved-place-tabs > .active { color: $ink; border-bottom-color: $orange; background: transparent; font-weight: 650; }
+.index-sheet { padding: 52px 32px 34px; text-align: center; background: $white; border: 2px solid $line; border-radius: 12px; }
+.index-sheet .atlas-imprint { color: $orange; font-size: 18px; }
+.index-map { position: relative; display: flex; align-items: center; justify-content: center; height: 140px; margin: 0 auto 28px; }
+.map-fold { width: 66px; height: 108px; background-color: #abc2a5; background-image: repeating-linear-gradient(41deg, transparent 0 22px, #fff2d5 23px 28px, transparent 29px 59px), repeating-linear-gradient(-61deg, transparent 0 31px, #6b9990 32px 39px, transparent 40px 72px); }
+.fold-one, .fold-three { transform: skewY(-13deg); }
+.fold-two { transform: skewY(13deg); background-color: #d0d8b3; }
+.index-pin { position: absolute; top: 2px; left: 50%; width: 38px; height: 38px; border: 10px solid $orange; border-radius: 50% 50% 0 50%; transform: rotate(45deg); background: #fbecd0; }
+.index-heading, .index-description { display: block; }
+.index-heading { font: 600 40px/1.5 'Songti SC', serif; margin: 12px 0; }
+.index-description { color: $muted; font-size: 24px; line-height: 1.75; margin: 0 auto 28px; max-width: 480px; }
+.index-sheet .primary-button { width: fit-content; margin: auto; min-height: 76px; padding: 18px 32px; }
+.favorite-card { border-radius: 12px; }
+.passport-cover { color: #fcf2d8; background: $ink; border-radius: 13px; padding: 28px 34px; }
+.passport-mast { color: #ebcc94; padding-bottom: 14px; border-bottom: 1px solid #749187; font-size: 18px; }
+.passport-mast > text:first-child { font: 600 30px/1 Georgia, serif; letter-spacing: 4px; }
+.passport-id { padding: 20px 0; }
+.passport-name { display: block; font: 500 54px/1.4 'Songti SC', serif; }
+.passport-origin { font-size: 23px; color: #d2ddc9; }
+.passport-compass { border: 5px double #cfb783; border-radius: 50%; width: 104px; height: 104px; line-height: 94px; text-align: center; color: #e6c88c; font-size: 76px; }
+.passport-stats { display: flex; border-top: 2px dashed #7a9284; padding-top: 18px; }
+.passport-stats > view { flex: 1; }
+.passport-stats text { display: block; font-size: 21px; color: #cedbcf; }
+.passport-stats text:first-child { font: 500 42px/1.2 Georgia, serif; color: $white; }
+.passport-page .settings-group { margin-bottom: 24px; }
+.map-directory { margin: -4px 0 22px; }
+.index-entry { display: flex; gap: 16px; align-items: center; text-align: left; width: 100%; padding: 22px 0; border-bottom: 1px solid $line; }
+.index-number { font: italic 26px Georgia, serif; color: $orange; }
+.index-name { font-size: 28px; font-weight: 600; flex: 1; }
+.index-meta { font-size: 21px; color: $muted; }
