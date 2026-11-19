@@ -4,8 +4,6 @@ from typing import Optional, Dict , List  , Any
 from pydantic import BaseModel , Field 
 import requests
 from src.utils.help import get_amadeus_token
-from duckduckgo_search import DDGS
-from bs4 import BeautifulSoup 
 from langchain_tavily import TavilySearch
 
 load_dotenv()

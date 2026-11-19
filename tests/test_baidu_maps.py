@@ -139,7 +139,9 @@ async def test_real_graph_calls_baidu_tool_and_reports_only_public_events(monkey
 def test_wechat_markers_use_official_conversion_and_never_expose_ak():
     calls = []
     def transport(url, **kwargs):
-        parsed = urlsplit(url); params = parse_qs(parsed.query); calls.append((parsed.path, params))
+        parsed = urlsplit(url)
+        params = parse_qs(parsed.query)
+        calls.append((parsed.path, params))
         if parsed.path == '/place/v2/search':
             return response({'status': 0, 'results': [{'name': '黄鹤楼', 'address': '武汉', 'location': {'lat': 30.5, 'lng': 114.3}}]})
         assert parsed.path == '/geoconv/v2/' and params['model'] == ['5']

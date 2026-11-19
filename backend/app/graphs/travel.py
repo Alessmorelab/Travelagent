@@ -24,9 +24,9 @@ from backend.app.services.query_tools import bounded_tool
 from backend.app.services.itinerary import itinerary_from_answer
 from backend.app.services.evidence import clean_tool_text, query_receipts
 from backend.app.services.grounding import GroundedAnswerText, guard_answer
-from backend.app.core.answers import PublicAnswerText, public_answer
+from backend.app.core.answers import PublicAnswerText as PublicAnswerText, public_answer
 from backend.app.services.baidu_mcp import TOOL_LABELS as MCP_TOOL_LABELS
-from backend.app.tools.catalog import capability_summary, load_tools_for, tools_for
+from backend.app.tools.catalog import capability_summary, load_tools_for, tools_for as tools_for
 
 STAGE_TIMEOUTS = {'plan': 15, 'discovery': 12, 'model': 25, 'tool': 20, 'answer': 35}
 

@@ -84,7 +84,10 @@ class GroundedAnswerText:
         by_id = {source['id']: source for source in self.sources}
         text = re.sub(r'\[(E\d+)\]', lambda m: m[0] if m[1] in by_id else '［依据待确认］', text)
         sources = [source for source in self.sources if not cited or source['id'] in cited]
-        canonical = lambda value: re.sub(r'[\s*#【】\[\]()（）]', '', value).lower()
+
+        def canonical(value):
+            return re.sub(r'[\s*#【】\[\]()（）]', '', value).lower()
+
         current = canonical(text)
         context = canonical(self.heading + text)
         mentioned = {canonical(fact.get('subject', '')) for source in self.sources for fact in source['facts']
@@ -130,15 +133,19 @@ class GroundedAnswerText:
                         if fact['kind'] == 'hours' and match[0].replace('：', ':') in fact['value'].replace('：', ':'):
                             if fact['subject'] and fact['subject'].lower() not in context:
                                 continue
-                            used.add(source['id']); return match[0]
-                self.note('hours'); return MISSING['hours']
+                            used.add(source['id'])
+                            return match[0]
+                self.note('hours')
+                return MISSING['hours']
             text = time_pattern.sub(hours, text)
             closure = re.compile(r'(?:每)?(?:周|星期)[一二三四五六日天][^。；\n]{0,10}(?:闭馆|休馆)')
             def closed(match):
                 for source in sources:
                     if any(fact['kind'] == 'hours' and match[0] in fact['value'] for fact in source['facts']):
-                        used.add(source['id']); return match[0]
-                self.note('hours'); return '闭馆安排待确认'
+                        used.add(source['id'])
+                        return match[0]
+                self.note('hours')
+                return '闭馆安排待确认'
             text = closure.sub(closed, text)
 
         weather = [source for source in self.sources if any(fact['kind'] == 'weather' for fact in source['facts'])]

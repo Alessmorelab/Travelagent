@@ -206,7 +206,8 @@ async def test_heartbeat_and_cancel_are_distinct_from_disconnect_and_isolated_by
 @pytest.mark.parametrize('terminal_error', [False, True])
 async def test_saved_answer_missing_done_frame_preserves_resume_cursor(tmp_path, terminal_error):
     repo = ChatRepository(tmp_path / 'crash-window.db')
-    token = repo.create_device(); owner = repo.authenticate(token)
+    token = repo.create_device()
+    owner = repo.authenticate(token)
     turn, _ = repo.begin(owner, 'team', None, 'one', '武汉', '武汉')
     # Simulate a crash after committing the answer but before sending done.
     for index, event in enumerate([
@@ -230,7 +231,8 @@ async def test_saved_answer_missing_done_frame_preserves_resume_cursor(tmp_path,
 @pytest.mark.asyncio
 async def test_restart_interrupted_request_can_be_retried_without_waiting_five_minutes(tmp_path):
     repo = ChatRepository(tmp_path / 'restart.db')
-    token = repo.create_device(); owner = repo.authenticate(token)
+    token = repo.create_device()
+    owner = repo.authenticate(token)
     turn, _ = repo.begin(owner, 'team', None, 'one', '武汉', '武汉')
     repo.append_event(turn['id'], {'type': 'accepted', 'conversation_id': turn['conversation_id'], 'seq': 1})
     repo.append_event(turn['id'], {'type': 'delta', 'content': '已发送的部分', 'seq': 2})

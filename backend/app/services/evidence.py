@@ -108,7 +108,8 @@ def query_receipts(evidence, now=None):
                 subject = str(item.get('name') or item.get('hotel_name') or subject)
                 date = item.get('date') or date
                 if not date and re.match(r'^\d{8}', str(item.get('uptime', ''))):
-                    stamp = str(item['uptime']); date = f'{stamp[:4]}-{stamp[4:6]}-{stamp[6:8]}'
+                    stamp = str(item['uptime'])
+                    date = f'{stamp[:4]}-{stamp[4:6]}-{stamp[6:8]}'
                 currency = str(item.get('currency') or currency)
                 for key, value in item.items():
                     field = f'{path}.{key}' if path else key

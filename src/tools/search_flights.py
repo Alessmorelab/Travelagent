@@ -208,35 +208,6 @@ def check_flight_status(flight_number: str, scheduled_date: str) -> str:
 
 
 @tool
-def get_checkin_links(airline_code: str) -> str:
-    """
-    Get the official check-in URL for a specific airline.
-    
-    Required:
-    - airline_code: 2-letter airline IATA code (e.g., TK, AF).
-    
-    Returns:
-    Direct link to the airline's check-in page.
-    """
-    token = get_amadeus_token()
-    url = "https://test.api.amadeus.com/v2/reference-data/urls/checkin-links"
-    headers = {"Authorization": f"Bearer {token}"}
-    params = {"airlineCode": airline_code}
-
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=20)
-        response.raise_for_status()
-        data = response.json()
-
-        if not data.get("data"):
-            return f"No check-in link found for airline: {airline_code.upper()}"
-
-        return data["data"][0].get("href", f"No link available for {airline_code.upper()}")
-    except requests.exceptions.RequestException as e:
-        return f"Error fetching check-in link: {str(e)}"
-
-
-@tool
 def book_flight_manually(
     originLocationCode: str,
     destinationLocationCode: str,
@@ -306,11 +277,7 @@ def book_flight_manually(
         f"• Stops: {stops}\n"
         f"• Price: {price} {currency}"
     )
-    
-from langchain_core.tools import tool
-import requests
-from typing import Optional
-from src.utils.help import get_amadeus_token
+
 
 @tool
 def get_checkin_links(

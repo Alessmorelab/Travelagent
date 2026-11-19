@@ -1,10 +1,9 @@
 from langchain_core.tools import tool 
 from dotenv import load_dotenv 
-from typing import Optional , Dict , List , Any 
+from typing import Optional, Dict, List
 from pydantic import BaseModel , Field 
 import requests 
 from src.utils.help import get_amadeus_token 
-from duckduckgo_search import DDGS
 from langchain_tavily import TavilySearch
 
 

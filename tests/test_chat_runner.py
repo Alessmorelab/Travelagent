@@ -258,7 +258,8 @@ async def test_factual_request_actually_queries_provider_before_answering(monkey
         return {'source': 'fixture provider', 'data': {'results': [{'name': '黄鹤楼'}]}}
 
     def respond(request):
-        payload = json.loads(request.content); requests.append(payload)
+        payload = json.loads(request.content)
+        requests.append(payload)
         if payload.get('tool_choice') == 'required':
             assert {item['function']['name'] for item in payload['tools']} == {'map_search_places'}
             delta = {'role': 'assistant', 'tool_calls': [{'index': 0, 'id': 'lookup', 'type': 'function',
