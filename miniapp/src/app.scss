@@ -476,3 +476,24 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .sheet .derived-date { display: flex; align-items: center; background: $sage; border-style: dashed; color: $muted; }
 .sheet .adjust-card, .sheet .adjust-slot { border-radius: 8px; }
 .sheet .adjust-card { border-left: 5px solid $orange; }
+
+.saved-place-card { border-top: 4px solid $ink; }
+.saved-place-card > .place-card-city { font-size: 20px; color: $orange; font-weight: 600; letter-spacing: 2px; }
+.saved-place-card > .saved-place-title, .transfer-title { font: 600 38px/1.4 'Songti SC', serif; margin: 10px 0; overflow-wrap: anywhere; }
+.saved-place-actions { align-items: center; border-top: 1px dashed $line; margin-top: 18px; padding-top: 12px; }
+.place-add { background: $ink; color: $white; border-radius: 8px; padding: 14px 22px; font-size: 24px; }
+.saved-place-actions .danger { margin-left: auto; }
+.transfer-place { padding: 22px 26px; border-left: 5px solid $orange; background: $white; margin-bottom: 24px; }
+.transfer-place text { display: block; overflow-wrap: anywhere; }
+.transfer-address { font-size: 23px; line-height: 1.6; color: $muted; }
+.transfer-day { display: flex; align-items: center; gap: 18px; width: 100%; min-height: 108px; text-align: left; padding: 16px 20px; margin-bottom: 12px; background: $white; border: 2px solid $line; border-radius: 8px; }
+.transfer-day.selected { border-color: $ink; background: $sage; }
+.transfer-number { flex: none; min-width: 62px; border-right: 1px solid #bdc6b5; color: $ink; }
+.transfer-number text, .transfer-day-copy text { display: block; }
+.transfer-number text:first-child { font-size: 16px; letter-spacing: 2px; }
+.transfer-number text:last-child { font: italic 34px/1.2 Georgia, serif; }
+.transfer-day-copy { flex: 1; min-width: 0; font-size: 24px; }
+.transfer-day-copy text:nth-child(2) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: $muted; font-size: 22px; }
+.transfer-badge { margin-top: 6px; color: $orange; font-size: 20px; }
+.transfer-radio { flex: none; display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; border: 2px solid #8e9b8c; font-size: 23px; }
+.selected .transfer-radio { background: $ink; color: $white; border-color: $ink; }

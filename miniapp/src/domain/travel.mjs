@@ -6,6 +6,7 @@ import { itineraryForMessage, readItinerary, validPlace } from './map-data.mjs';
 import { dayRevision, previewDayAdjustment, readDayAdjustmentUndo, remapDayCompletion } from './day-adjustment.mjs';
 
 export const STORAGE_KEY = 'roam.travel.v1';
+export const MAX_ACTIVITIES_PER_DAY = 50;
 export const AGENTS = [
   { id: 'team', label: '整趟行程', icon: 'sparkles-outline' },
   { id: 'flights', label: '查机票', icon: 'airplane-outline' },
@@ -235,7 +236,7 @@ export function createTravelStore(storage, options = {}) {
       if (!place || !trip || !Number.isInteger(day) || !trip.days[day]) throw new Error('请选择有效的收藏地点、行程和天数');
       if (trip.sample) throw new Error('请先创建自己的行程，再加入收藏地点');
       if (trip.days[day].some((item) => samePlace(item.place, place))) { update({ focusTripId: tripId, activeDay: day }); toast('当天已有这个地点'); return; }
-      if (trip.days[day].length >= 50) throw new Error('当天最多保存50项安排');
+      if (trip.days[day].length >= MAX_ACTIVITIES_PER_DAY) throw new Error(`当天最多保存${MAX_ACTIVITIES_PER_DAY}项安排`);
       const days = trip.days.map((items) => items.slice());
       days[day].push({ title: place.name, time: '时间待定', detail: place.address, icon: 'compass-outline', place: cleanSavedPlace(place, place.city) });
       update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days } : item), focusTripId: tripId, activeDay: day }, true);
@@ -426,13 +427,13 @@ export function createTravelStore(storage, options = {}) {
       if (!trip || !Number.isInteger(day) || day < 0 || day >= trip.days.length || !Number.isInteger(index) || index < -1 || index >= trip.days[day].length) throw new Error('行程安排不存在');
       const title = String(value.title || '').trim(), time = String(value.time || '').trim(), detail = String(value.detail || '').trim();
       if (!title || title.length > 100 || time.length > 40 || detail.length > 5000) throw new Error('请填写地点或安排，并检查内容长度');
-      if (index === -1 && trip.days[day].length >= 50) throw new Error('当天最多保存50项安排');
+      if (index === -1 && trip.days[day].length >= MAX_ACTIVITIES_PER_DAY) throw new Error(`当天最多保存${MAX_ACTIVITIES_PER_DAY}项安排`);
       const days = trip.days.map((items) => items.slice());
       const previous = index >= 0 ? days[day][index] : null;
       const activity = { title, time: time || '时间待定', detail, icon: previous?.icon || 'compass-outline', ...(previous?.locked === true ? { locked: true } : {}), ...(previous?.title === title && validPlace(previous.place) ? { place: previous.place } : {}) };
       const expanded = expandActivities([activity]);
       if (index < 0) days[day].push(...expanded); else days[day].splice(index, 1, ...expanded);
-      if (days[day].length > 50) throw new Error('拆分后当天安排超过50项，请减少地点');
+      if (days[day].length > MAX_ACTIVITIES_PER_DAY) throw new Error(`拆分后当天安排超过${MAX_ACTIVITIES_PER_DAY}项，请减少地点`);
       const completed = index < 0 ? trip.completed : remapDayCompletion(trip.completed, day,
         (i) => i === index ? (previous.title === title ? i : null) : i > index ? i + expanded.length - 1 : i);
       update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed } : item) }, true);

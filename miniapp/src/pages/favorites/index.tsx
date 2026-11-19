@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import Taro from '@tarojs/taro';
 import { Text, View, Button, Input, Picker } from '@tarojs/components';
-import { DESTINATIONS } from '../../domain/travel.mjs';
+import { DESTINATIONS, MAX_ACTIVITIES_PER_DAY } from '../../domain/travel.mjs';
+import { tripEndDate } from '../../domain/trip-details.mjs';
+import { samePlace } from '../../domain/saved-places.mjs';
 import type { State } from '../../domain/travel.mjs';
 import type { SavedPlace } from '../../domain/saved-places.mjs';
 import { DestinationSheet, Empty, FavoriteButton, Filters, PageHeading, Scenic, Sheet, Toast } from '../../components';
@@ -14,19 +16,40 @@ function AddPlaceSheet({ place, state, onClose }: { place: SavedPlace; state: St
   const [error, setError] = useState('');
   const trip = trips.find((item) => item.id === tripId) || trips[0];
   const selectedDay = Math.min(day, (trip?.days.length || 1) - 1);
+  const choices = trip?.days.map((activities, index) => ({
+    date: tripEndDate(trip.startDate, index + 1),
+    existing: activities.some((activity) => samePlace(activity.place, place)),
+    full: activities.length >= MAX_ACTIVITIES_PER_DAY,
+    count: activities.length,
+    summary: activities.slice(0, 2).map((activity) => activity.title).join(' → '),
+  })) || [];
+  const choice = choices[selectedDay];
   const add = () => {
     if (!trip) return;
     try { store.addSavedPlaceToTrip(place.id, trip.id, selectedDay); onClose(); goTab('trips'); }
     catch (e) { setError((e as Error).message); }
   };
-  return <Sheet title='加入每日行程' onClose={onClose}>
-    <Text className='sheet-description'>{place.name} · {place.address || place.city || '地址未提供'}</Text>
-    {!trip ? <><Text className='note'>请先创建或保存一份自己的行程，再选择加入哪一天。</Text><Button className='primary-button' onClick={() => { onClose(); goTab('trips'); }}>前往行程页</Button></> : <>
+  return <Sheet title='加入每日行程' folio='03  /  PLACE TRANSFER' onClose={onClose} footer={<>
+    {error && <Text className='form-error'>{error}</Text>}
+    {choice ? <Button className='primary-button' disabled={choice.full && !choice.existing} onClick={add}>
+      {choice.existing ? `查看第 ${selectedDay + 1} 天的安排` : choice.full ? '当天已满，请另选日期' : `加入第 ${selectedDay + 1} 天`}
+    </Button> : <Button className='primary-button' onClick={() => { onClose(); goTab('trips'); }}>前往行程页</Button>}
+  </>}>
+    <View className='transfer-place'><Text className='folio-code'>收藏地点{place.city ? `  /  ${place.city}` : ''}</Text>
+      <Text className='transfer-title'>{place.name}</Text><Text className='transfer-address'>{place.address || '地址未提供'}</Text></View>
+    {!trip ? <Text className='note'>请先创建或保存一份自己的行程，再选择加入哪一天。</Text> : <>
       <View className='form-field'><Text className='field-label'>选择行程</Text><Picker mode='selector' range={trips.map((item) => item.title)} value={Math.max(0, trips.indexOf(trip))} onChange={(e) => { setTripId(trips[Number(e.detail.value)]?.id || ''); setDay(0); setError(''); }}><View className='form-input date-value'>{trip.title}<Text>⌄</Text></View></Picker></View>
-      <View className='form-field'><Text className='field-label'>加入哪一天</Text><Picker mode='selector' range={trip.days.map((_, index) => `第 ${index + 1} 天`)} value={selectedDay} onChange={(e) => setDay(Number(e.detail.value))}><View className='form-input date-value'>第 {selectedDay + 1} 天<Text>⌄</Text></View></Picker></View>
-      <Text className='note'>会保留该地点的实际地址、坐标和来源，具体游览时间由你继续安排。</Text>
-      {error && <Text className='form-error'>{error}</Text>}
-      <Button className='primary-button' onClick={add}>加入第 {selectedDay + 1} 天</Button>
+      <View className='atlas-section'><Text>选择日期</Text><Text className='folio-code'>DAY INDEX</Text></View>
+      {choices.map((item, index) => <Button key={index} className={`transfer-day ${index === selectedDay ? 'selected' : ''}`}
+        ariaLabel={`第 ${index + 1} 天，${item.date || '日期待定'}，${item.count} 项安排${item.existing ? '，已含此地点' : item.full ? '，已满' : ''}${index === selectedDay ? '，已选中' : ''}`}
+        onClick={() => { setDay(index); setError(''); }}>
+        <View className='transfer-number'><Text>DAY</Text><Text>{String(index + 1).padStart(2, '0')}</Text></View>
+        <View className='transfer-day-copy'><Text>{item.date || '日期待定'} · {item.count} 项安排</Text>
+          <Text>{item.summary || '还没有安排'}{item.count > 2 ? ' …' : ''}</Text>
+          {(item.existing || item.full) && <Text className='transfer-badge'>{item.existing ? '已含此地点' : '当天已满'}</Text>}</View>
+        <Text className='transfer-radio'>{index === selectedDay ? '✓' : ''}</Text>
+      </Button>)}
+      <Text className='sheet-description'>新地点会排在所选日期的末尾，游览时间可稍后填写。</Text>
     </>}
   </Sheet>;
 }
@@ -51,10 +74,10 @@ export default function FavoritesPage() {
     {tab === 'places' ? <>
       {!!state.savedPlaces.length && <Input className='form-input saved-place-search' value={query} maxlength={100} placeholder='按地点名称、地址或城市筛选' onInput={(e) => setQuery(e.detail.value)} />}
       {saved.map((place) => <View className='saved-place-card' key={place.id}>
+        <Text className='place-card-city'>{place.city || '地点档案'}  /  PLACE FILE</Text>
         <Text className='saved-place-title'>{place.name}</Text><Text>{place.address || '地址未提供'}</Text>
-        {!!place.city && <Text className='muted'>{place.city}</Text>}
         <Text className='muted'>来源：{place.source} · 上次查询：{place.retrieved_at}</Text>
-        <View className='saved-place-actions'><Button className='text-button' onClick={() => open(place)}>打开位置</Button><Button className='text-button' onClick={() => setAdding(place.id)}>加入行程</Button><Button className='text-button danger' onClick={() => store.removeSavedPlace(place.id)}>移除收藏</Button></View>
+        <View className='saved-place-actions'><Button className='place-add' onClick={() => setAdding(place.id)}>加入行程</Button><Button className='text-button' onClick={() => open(place)}>打开位置 ↗</Button><Button className='text-button danger' onClick={() => store.removeSavedPlace(place.id)}>移除收藏</Button></View>
       </View>)}
       {!saved.length && (state.savedPlaces.length ? <View className='empty'><Text className='empty-title'>没有符合筛选条件的地点</Text><Button className='text-button' onClick={() => setQuery('')}>清除筛选</Button></View> : <View className='index-sheet'>
         <View className='index-map'><View className='map-fold fold-one' /><View className='map-fold fold-two' /><View className='map-fold fold-three' /><View className='index-pin' /></View>
