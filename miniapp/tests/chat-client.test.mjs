@@ -215,6 +215,10 @@ test('地图查询使用安装凭证并拒绝未转换或无效坐标', async ()
   } });
   const result = await client.searchPlaces('https://travel.example', '武汉', '黄鹤楼');
   assert.equal(result.places[0].name, '黄鹤楼');
+  assert.equal(result.places[0].city, '武汉');
+  assert.equal(result.places[0].coordinate_system, 'gcj02');
+  assert.equal(result.places[0].source, result.source);
+  assert.equal(result.places[0].retrieved_at, result.retrieved_at);
   assert.equal(requests.at(-1).init.headers.Authorization, 'Bearer test-token');
   assert.deepEqual(JSON.parse(requests.at(-1).init.body), { city: '武汉', query: '黄鹤楼' });
   coordinateSystem = 'bd09ll';

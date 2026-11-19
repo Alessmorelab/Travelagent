@@ -63,10 +63,9 @@ export function createChatClient({ fetch, storage, connectSocket, reconnectDelay
       const data = await post(apiUrl, 'trips/adjust-day', request, signal, '无法生成改动，请检查后端版本或调整要求');
       return readDayChanges(data?.changes, request.targets);
     },
-    async searchPlaces(apiUrl, city, query) {
-      const data = await mapRequest(apiUrl, 'places', { city, query });
-      normalizedPlaces(data);
-      return data;
+    async searchPlaces(apiUrl, city, query, signal) {
+      const data = await mapRequest(apiUrl, 'places', { city, query }, signal);
+      return { ...data, places: normalizedPlaces(data).map((place) => ({ ...place, city })) };
     },
     async resolvePlaces(apiUrl, city, queries, signal) {
       const data = await mapRequest(apiUrl, 'resolve', { city, queries }, signal);

@@ -9,7 +9,7 @@ export type { MapPlace };
 export type MapSearchResult = { source: string; retrieved_at: string; coordinate_system: 'gcj02'; places: MapPlace[] };
 export function createChatClient(options: { fetch: TravelFetch; storage: { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<void> }; connectSocket(options: any): any; reconnectDelays?: number[]; heartbeatTimeout?: number }): {
   adjustDay(apiUrl: string, request: DayAdjustmentRequest, signal?: TravelSignal): Promise<DayChange[]>;
-  searchPlaces(apiUrl: string, city: string, query: string): Promise<MapSearchResult>;
+  searchPlaces(apiUrl: string, city: string, query: string, signal?: TravelSignal): Promise<MapSearchResult>;
   resolvePlaces(apiUrl: string, city: string, queries: string[], signal?: TravelSignal): Promise<MapResolution[]>;
   routeDay(apiUrl: string, stops: MapPlace[], mode: string, segments?: number[], signal?: TravelSignal): Promise<RouteLeg[]>;
   stream: StreamTransport;

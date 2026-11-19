@@ -315,11 +315,7 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .activity-edit-hint { display: block; color: #829574; font-size: 20px; margin-top: 8px; }
 .trip-note-input { height: 180px; padding: 16px 19px; box-sizing: border-box; }
 .trip-source-text { display: block; white-space: pre-wrap; word-break: break-word; font-size: 24px; line-height: 1.8; }
-.place-map-heading { display: flex; align-items: center; gap: 30px; font-size: 32px; font-weight: 600; padding: 20px 0 30px; }
 .place-map { display: block; width: 100%; height: 560px; margin-top: 28px; border-radius: 20px; }
-.place-map-result { padding: 20px 0; border-bottom: 1px solid $line; }
-.place-map-result > text { display: block; font-size: 25px; line-height: 1.7; }
-.place-map-result > text:last-child { color: $muted; font-size: 21px; }
 .map-mode-options { display: flex; gap: 12px; padding: 24px 0; }
 .map-mode { flex: 1; font-size: 25px; color: $muted; background: transparent; border: 1px solid $line; }
 .map-mode.active { color: #fff; background: $ink; border-color: $ink; }
@@ -497,3 +493,28 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .transfer-badge { margin-top: 6px; color: $orange; font-size: 20px; }
 .transfer-radio { flex: none; display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; border: 2px solid #8e9b8c; font-size: 23px; }
 .selected .transfer-radio { background: $ink; color: $white; border-color: $ink; }
+
+.gazetteer .route-title, .gazetteer-intro, .lookup-context, .lookup-name, .lookup-address, .lookup-source, .lookup-empty text { display: block; overflow-wrap: anywhere; }
+.gazetteer-intro { margin: 10px 0 24px; font-size: 24px; line-height: 1.65; color: $muted; }
+.gazetteer-form { padding: 6px 24px 20px; background: $white; border: 2px solid $line; border-top: 4px solid $ink; border-radius: 8px; margin-bottom: 24px; }
+.lookup-field { display: flex; align-items: center; gap: 18px; padding: 10px 0; border-bottom: 1px solid $line; }
+.lookup-field .field-label { flex: none; width: 118px; font-size: 23px; margin: 0; color: $muted; }
+.lookup-field input { flex: 1; min-width: 0; height: 62px; font-size: 27px; }
+.gazetteer-form .primary-button { width: 100%; min-height: 78px; margin-top: 16px; padding: 14px; }
+.lookup-guide { padding: 30px; border-radius: 10px; background: #234e48 url('./assets/route-print.svg') center / cover no-repeat; color: #fff7df; }
+.lookup-guide .folio-code { color: #efd4a5; }
+.lookup-guide > text:nth-child(2), .lookup-empty > text:first-child { display: block; font: 600 33px/1.5 'Songti SC', serif; margin: 8px 0; }
+.lookup-guide > view { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.lookup-guide button { min-height: 70px; padding: 15px 22px; background: #f6f1df; color: $ink; font-size: 23px; border-radius: 7px; }
+.lookup-context { color: $muted; font-size: 25px; }
+.lookup-tabs { margin-bottom: 18px; }
+.lookup-card, .lookup-empty { padding: 22px 24px; border: 2px solid $line; background: $white; border-radius: 9px; margin-bottom: 16px; }
+.lookup-card.selected { border-color: $ink; }
+.lookup-card-head, .lookup-actions { display: flex; align-items: center; gap: 16px; }
+.lookup-card-head > view { flex: 1; min-width: 0; }
+.lookup-name { font: 600 34px/1.45 'Songti SC', serif; }
+.lookup-address, .lookup-empty > text:last-child { font-size: 24px; line-height: 1.7; color: $muted; }
+.lookup-actions { justify-content: space-between; flex-wrap: wrap; border-top: 1px dashed $line; margin-top: 16px; }
+.lookup-actions button, .gazetteer .route-key button { min-height: 72px; padding: 12px 4px; }
+.gazetteer .route-key button { color: #fff7df; text-decoration: underline; }
+.lookup-source { padding-top: 8px; font-size: 21px; line-height: 1.65; color: $muted; }

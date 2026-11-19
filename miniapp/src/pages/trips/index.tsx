@@ -1,56 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import Taro, { useDidShow } from '@tarojs/taro';
-import { Button, Input, Map, ScrollView, Text, Textarea, View } from '@tarojs/components';
+import { Button, Input, ScrollView, Text, Textarea, View } from '@tarojs/components';
 import { dayCount, formatDate } from '../../domain/travel.mjs';
-import type { Activity, State, Trip } from '../../domain/travel.mjs';
+import type { Activity, Trip } from '../../domain/travel.mjs';
 import { Empty, Icon, PageHeading, PreferenceSheet, Sheet, Toast } from '../../components';
 import { QuerySources } from '../../chat-components';
 import { readSources } from '../../domain/query-sources.mjs';
 import { TripDetailsSheet } from '../../trip-details-sheet';
 import { DayAdjustmentSheet } from '../../day-adjustment-sheet';
-import { SavedPlaceButton } from '../../saved-place-button';
+import { PlaceSearch } from '../../place-search';
 import { formatTripText } from '../../domain/trip-details.mjs';
 import { ItineraryMap } from '../../itinerary-map';
 import { itineraryForMessage } from '../../domain/map-data.mjs';
 import { isProtectedActivity, MAX_DAY_ACTIVITIES } from '../../domain/day-adjustment.mjs';
-import { chatClient, store, useTravelState } from '../../stores/travel';
+import { store, useTravelState } from '../../stores/travel';
 
-function PlaceMapView({ state, initialCity, onClose }: { state: State; initialCity: string; onClose: () => void }) {
-  const [city, setCity] = useState(initialCity);
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [searchedCity, setSearchedCity] = useState('');
-  const [result, setResult] = useState<Awaited<ReturnType<typeof chatClient.searchPlaces>> | null>(null);
-  const active = useRef(true);
-  useEffect(() => () => { active.current = false; }, []);
-  const search = async () => {
-    const cityValue = city.trim(), queryValue = query.trim();
-    if (!cityValue || !queryValue) { setError('请填写城市和地点关键词'); return; }
-    if (state.connection.mode !== 'live') { setError('请先在「我的 → 旅行服务」连接真实服务'); return; }
-    setLoading(true); setError(''); setResult(null);
-    try { const data = await chatClient.searchPlaces(state.connection.apiUrl, cityValue, queryValue); if (active.current) { setSearchedCity(cityValue); setResult(data); } }
-    catch (e) { if (active.current) setError((e as Error).message || '地点查询失败'); }
-    finally { if (active.current) setLoading(false); }
-  };
-  const places = result?.places || [];
-  const markers = places.map((place, index) => ({ id: index + 1, latitude: place.latitude, longitude: place.longitude,
-    title: place.name, iconPath: '/assets/tabs/map-active.png', width: 28, height: 28 }));
-  return <View className='page place-map-page'>
-    <View className='place-map-heading'><Button className='text-button' onClick={onClose}>← 返回行程</Button><Text>地点地图</Text></View>
-    <Text className='sheet-description'>查询实际地点后在地图上标记，地点和坐标由百度地图提供。</Text>
-    <View className='form-row'><View className='form-field'><Text className='field-label'>城市</Text><Input className='form-input' value={city} maxlength={50} placeholder='例如武汉' onInput={(event) => setCity(event.detail.value)} /></View>
-      <View className='form-field'><Text className='field-label'>地点关键词</Text><Input className='form-input' value={query} maxlength={45} placeholder='例如黄鹤楼' onInput={(event) => setQuery(event.detail.value)} /></View></View>
-    <Button className='primary-button' loading={loading} disabled={loading} onClick={() => void search()}>{loading ? '正在查询' : '查询地点'}</Button>
-    {error && <Text className='form-error'>{error}</Text>}
-    {result && !places.length && <Text className='note'>未查到符合条件的地点，请调整关键词。</Text>}
-    {!!places.length && <><Map className='place-map' latitude={places[0].latitude} longitude={places[0].longitude} markers={markers}
-      includePoints={places.map((place) => ({ latitude: place.latitude, longitude: place.longitude }))} scale={12} onError={() => setError('地图加载失败，请检查微信开发者工具或网络')} />
-      <Text className='note'>来源：{result?.source} · 查询时间：{result?.retrieved_at}</Text>
-      {places.map((place, index) => <View className='place-map-result' key={`${index}-${place.name}`}><Text>{place.name}</Text><Text>{place.address || '地址未提供'}</Text><SavedPlaceButton state={state} city={searchedCity} place={{ ...place, coordinate_system: 'gcj02', source: result!.source, retrieved_at: result!.retrieved_at }} /></View>)}
-    </>}
-  </View>;
-}
 
 function ActivitySheet({ trip, day, index, onClose }: { trip: Trip; day: number; index: number; onClose: () => void }) {
   const existing = index >= 0 ? trip.days[day]?.[index] : undefined;
@@ -117,7 +81,7 @@ export default function TripsPage() {
   const mapItinerary = mapMessage ? itineraryForMessage(mapMessage) : null;
   if (mapTarget && (mapTrip || mapItinerary)) return <><Toast state={state} /><ItineraryMap key={`${mapTarget.kind}-${mapTarget.id}`} state={state} kind={mapTarget.kind} id={mapTarget.id}
     days={(mapTrip || mapItinerary)!.days} destination={(mapTrip || mapItinerary)!.destination} sample={mapTrip?.sample || mapMessage?.mode === 'demo'} onClose={() => store.closeMap()} /></>;
-  if (mapOpen) return <><Toast state={state} /><PlaceMapView state={state} initialCity={trip?.destination || ''} onClose={() => setMapOpen(false)} /></>;
+  if (mapOpen) return <><Toast state={state} /><PlaceSearch key={`${state.connection.mode}:${state.connection.apiUrl}`} state={state} initialCity={trip?.destination || ''} onClose={() => setMapOpen(false)} /></>;
   return <View className='page'><Toast state={state} /><PageHeading en='02  /  ITINERARY' title='行程手册' subtitle={`共 ${state.trips.length} 份行程`} action={create} />
     <Button className='atlas-explore map-directory' onClick={() => setMapOpen(true)}><Text>地点地图</Text><Text>按城市查找 ↗</Text></Button>
     {!trip ? <Empty icon='map' title='下一站，还在等你' description='创建一份行程草稿，慢慢填满旅途的每一天。' action='新建行程' onClick={create} /> : <>
