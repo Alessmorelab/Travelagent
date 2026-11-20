@@ -54,7 +54,8 @@ export default function TripsPage() {
   const [showSources, setShowSources] = useState(false);
   const [showSource, setShowSource] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  useDidShow(() => { const id = store.getState().focusTripId; if (id) { setSelectedId(id); store.clearTripFocus(); } });
+  const openTrip = (id: string) => { setMapOpen(false); setSelectedId(id); store.clearTripFocus(); };
+  useDidShow(() => { const id = store.getState().focusTripId; if (id) openTrip(id); });
   const trip = state.trips.find((item) => item.id === selectedId) || state.trips[0];
   const day = Math.max(0, Math.min(state.activeDay, (trip?.days.length || 1) - 1));
   const copy = async () => {
@@ -81,7 +82,7 @@ export default function TripsPage() {
   const mapItinerary = mapMessage ? itineraryForMessage(mapMessage) : null;
   if (mapTarget && (mapTrip || mapItinerary)) return <><Toast state={state} /><ItineraryMap key={`${mapTarget.kind}-${mapTarget.id}`} state={state} kind={mapTarget.kind} id={mapTarget.id}
     days={(mapTrip || mapItinerary)!.days} destination={(mapTrip || mapItinerary)!.destination} sample={mapTrip?.sample || mapMessage?.mode === 'demo'} onClose={() => store.closeMap()} /></>;
-  if (mapOpen) return <><Toast state={state} /><PlaceSearch key={`${state.connection.mode}:${state.connection.apiUrl}`} state={state} initialCity={trip?.destination || ''} onClose={() => setMapOpen(false)} /></>;
+  if (mapOpen) return <><Toast state={state} /><PlaceSearch key={`${state.connection.mode}:${state.connection.apiUrl}`} state={state} trip={trip} onOpenTrip={openTrip} onClose={() => setMapOpen(false)} /></>;
   return <View className='page'><Toast state={state} /><PageHeading en='02  /  ITINERARY' title='行程手册' subtitle={`共 ${state.trips.length} 份行程`} action={create} />
     <Button className='atlas-explore map-directory' onClick={() => setMapOpen(true)}><Text>地点地图</Text><Text>按城市查找 ↗</Text></Button>
     {!trip ? <Empty icon='map' title='下一站，还在等你' description='创建一份行程草稿，慢慢填满旅途的每一天。' action='新建行程' onClick={create} /> : <>

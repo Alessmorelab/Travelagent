@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import Taro from '@tarojs/taro';
 import { Button, Input, Map as NativeMap, Text, View } from '@tarojs/components';
-import type { State } from './domain/travel.mjs';
+import type { State, Trip } from './domain/travel.mjs';
+import type { MapPlace } from './domain/map-data.mjs';
+import { AddPlaceSheet } from './add-place-sheet';
 import type { MapSearchResult } from './services/chat-client.mjs';
 import { createMiniController } from './services/wechat.mjs';
-import { chatClient } from './stores/travel';
+import { chatClient, store } from './stores/travel';
 import { SavedPlaceButton } from './saved-place-button';
 
 type SearchPage = MapSearchResult & { city: string; query: string };
 const numberLabel = (index: number) => String(index + 1).padStart(2, '0');
 
-export function PlaceSearch({ state, initialCity, onClose }: { state: State; initialCity: string; onClose(): void }) {
-  const [city, setCity] = useState(initialCity);
+export function PlaceSearch({ state, trip, onClose, onOpenTrip }: {
+  state: State; trip?: Trip; onClose(): void; onOpenTrip(tripId: string): void;
+}) {
+  const [city, setCity] = useState(trip?.destination || '');
+  const [adding, setAdding] = useState<MapPlace | null>(null);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState<SearchPage | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -78,19 +83,21 @@ export function PlaceSearch({ state, initialCity, onClose }: { state: State; ini
         </View>
         {view === 'list' ? places.map((place, index) => <View key={place.uid || index} className={`lookup-card ${selected === index ? 'selected' : ''}`}>
           <View className='lookup-card-head'><Text className='stop-number'>{numberLabel(index)}</Text><View><Text className='lookup-name'>{place.name}</Text><Text className='lookup-address'>{place.address || '地址未提供'}</Text></View></View>
-          <View className='lookup-actions'><Button className='atlas-link' onClick={() => showMap(index)}>地图定位 ↗</Button><SavedPlaceButton place={place} city={page.city} state={state} /></View>
+          <View className='lookup-actions'><Button className='place-add' onClick={() => setAdding(place)}>加入行程</Button><Button className='atlas-link' onClick={() => showMap(index)}>地图定位 ↗</Button><SavedPlaceButton place={place} city={page.city} state={state} /></View>
         </View>) : <>
-          <View className='route-plate'><NativeMap className='place-map' latitude={center.latitude} longitude={center.longitude} scale={selected === null ? 12 : 15} markers={markers}
+          <View className='route-plate'>{!adding && <NativeMap className='place-map' latitude={center.latitude} longitude={center.longitude} scale={selected === null ? 12 : 15} markers={markers}
             includePoints={selected === null ? places.map(({ latitude, longitude }) => ({ latitude, longitude })) : undefined}
-            onMarkerTap={(event) => { const index = Number(event.detail.markerId) - 1; if (places[index]) setSelected(index); }} onError={() => setMapError(true)} />
+            onMarkerTap={(event) => { const index = Number(event.detail.markerId) - 1; if (places[index]) setSelected(index); }} onError={() => setMapError(true)} />}
             <View className='route-key'><Text>{page.city} · {places.length} 处地点</Text>{selected !== null && <Button onClick={() => setSelected(null)}>显示全部</Button>}</View></View>
           {mapError && <Text className='form-error'>地图加载失败，仍可在结果列表中核对地址和收藏地点。</Text>}
           {current && selected !== null ? <View className='lookup-card selected'>
             <Text className='folio-code'>选中地点 / {numberLabel(selected)}</Text><Text className='lookup-name'>{current.name}</Text><Text className='lookup-address'>{current.address || '地址未提供'}</Text>
-            <SavedPlaceButton place={current} city={page.city} state={state} /></View> : <Text className='sheet-description'>点按地图标记，查看地址与收藏选项。</Text>}
+            <View className='lookup-actions'><Button className='place-add' onClick={() => setAdding(current)}>加入行程</Button><SavedPlaceButton place={current} city={page.city} state={state} /></View></View> : <Text className='sheet-description'>点按地图标记，查看地址、加入行程或收藏地点。</Text>}
         </>}
       </> : <View className='lookup-empty'><Text>没有找到匹配地点</Text><Text>请核对城市，或试试更短的名称。</Text></View>}
       <Text className='lookup-source'>来源：{page.source} · 查询时间：{page.retrieved_at}</Text>
     </View>}
+    {adding && <AddPlaceSheet place={adding} preferredTrip={trip} state={state} onClose={() => setAdding(null)} onNoTrip={onClose}
+      onChoose={(tripId, day) => { store.addPlaceToTrip(adding, tripId, day); onOpenTrip(tripId); }} />}
   </View>;
 }

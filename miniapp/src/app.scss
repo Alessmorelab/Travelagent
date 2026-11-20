@@ -516,5 +516,6 @@ button[disabled] { opacity: .42; background: transparent; color: inherit; }
 .lookup-address, .lookup-empty > text:last-child { font-size: 24px; line-height: 1.7; color: $muted; }
 .lookup-actions { justify-content: space-between; flex-wrap: wrap; border-top: 1px dashed $line; margin-top: 16px; }
 .lookup-actions button, .gazetteer .route-key button { min-height: 72px; padding: 12px 4px; }
+.lookup-actions .place-add { padding: 12px 20px; }
 .gazetteer .route-key button { color: #fff7df; text-decoration: underline; }
 .lookup-source { padding-top: 8px; font-size: 21px; line-height: 1.65; color: $muted; }

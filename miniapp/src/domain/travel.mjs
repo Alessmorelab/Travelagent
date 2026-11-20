@@ -148,6 +148,22 @@ export function createTravelStore(storage, options = {}) {
     return !!trip && trip.adjustmentUndo?.[day]?.after === dayRevision(trip, day);
   };
 
+  const addPlaceToTrip = (place, tripId, day) => {
+    const trip = state.trips.find((item) => item.id === tripId);
+    if (!place || !trip || !Number.isInteger(day) || !trip.days[day]) throw new Error('请选择有效的地点、行程和天数');
+    if (trip.sample) throw new Error('请先创建自己的行程，再加入地点');
+    const confirmed = cleanSavedPlace(place, place.city);
+    const activities = trip.days[day];
+    if (activities.some((item) => samePlace(item.place, confirmed))) {
+      update({ focusTripId: tripId, activeDay: day }); toast('当天已有这个地点'); return;
+    }
+    if (activities.length >= MAX_ACTIVITIES_PER_DAY) throw new Error(`当天最多保存${MAX_ACTIVITIES_PER_DAY}项安排`);
+    const days = trip.days.slice();
+    days[day] = [...activities, { title: confirmed.name, time: '时间待定', detail: confirmed.address, icon: 'compass-outline', place: confirmed }];
+    update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days } : item), focusTripId: tripId, activeDay: day }, true);
+    toast('已加入行程');
+  };
+
   return {
     getState: () => state,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
@@ -231,16 +247,9 @@ export function createTravelStore(storage, options = {}) {
       }
     },
     removeSavedPlace(id) { update({ savedPlaces: state.savedPlaces.filter((item) => item.id !== id) }, true); toast('已移除收藏地点'); },
+    addPlaceToTrip,
     addSavedPlaceToTrip(placeId, tripId, day) {
-      const place = state.savedPlaces.find((item) => item.id === placeId), trip = state.trips.find((item) => item.id === tripId);
-      if (!place || !trip || !Number.isInteger(day) || !trip.days[day]) throw new Error('请选择有效的收藏地点、行程和天数');
-      if (trip.sample) throw new Error('请先创建自己的行程，再加入收藏地点');
-      if (trip.days[day].some((item) => samePlace(item.place, place))) { update({ focusTripId: tripId, activeDay: day }); toast('当天已有这个地点'); return; }
-      if (trip.days[day].length >= MAX_ACTIVITIES_PER_DAY) throw new Error(`当天最多保存${MAX_ACTIVITIES_PER_DAY}项安排`);
-      const days = trip.days.map((items) => items.slice());
-      days[day].push({ title: place.name, time: '时间待定', detail: place.address, icon: 'compass-outline', place: cleanSavedPlace(place, place.city) });
-      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days } : item), focusTripId: tripId, activeDay: day }, true);
-      toast('已加入行程');
+      addPlaceToTrip(state.savedPlaces.find((item) => item.id === placeId), tripId, day);
     },
     saveTripDetails(tripId, value) {
       const trip = state.trips.find((item) => item.id === tripId);

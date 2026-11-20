@@ -88,6 +88,25 @@ test('无效坐标不能收藏，损坏和重复收藏记录不会影响其他�
   assert.deepEqual(readSavedPlaces({ bad: true }), []);
 });
 
+test('搜索地点可直接加入指定日期：同名分馆按位置区分，重复确认只定位，收藏不受影响', async (t) => {
+  const { store, storage, id } = await setup(t);
+  const north = { ...place('测试展馆'), city: '武汉', uid: 'north' };
+  const south = { ...north, uid: 'south', address: '南馆', latitude: 30.6 };
+  store.toggleSavedPlace(north);
+  const count = store.getState().trips.find((trip) => trip.id === id).days[1].length;
+  store.addPlaceToTrip(south, id, 1);
+  store.addPlaceToTrip(south, id, 1);
+  assert.equal(store.getState().focusTripId, id);
+  assert.equal(store.getState().activeDay, 1);
+  assert.throws(() => store.addPlaceToTrip({ ...north, coordinate_system: 'bd09ll' }, id, 1), /确认实际地点/);
+  await store.flush();
+  const reopened = createTravelStore(storage); t.after(() => reopened.dispose()); await reopened.hydrate();
+  const activities = reopened.getState().trips.find((trip) => trip.id === id).days[1];
+  assert.equal(activities.length, count + 1);
+  assert.deepEqual(activities.at(-1).place, south);
+  assert.deepEqual(reopened.getState().savedPlaces.map((item) => item.uid), ['north']);
+});
+
 test('已有地点可直接取消收藏，收藏上限和无效行程目标有明确提示', async (t) => {
   const { store, id } = await setup(t);
   store.toggleSavedPlace(place(), '武汉'); const favorite = store.getState().savedPlaces[0];

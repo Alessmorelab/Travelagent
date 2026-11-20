@@ -35,6 +35,7 @@ export function createTravelStore(storage: { getItem(key: string): Promise<strin
   setTab(tab: Tab): void; setAgent(agent: Agent): void; setFilter(filter: string): void; setActiveDay(day: number): void;
   toggleSavedPlace(place: MapPlace, city?: string): void; removeSavedPlace(id: string): void;
   addSavedPlaceToTrip(placeId: string, tripId: string, day: number): void;
+  addPlaceToTrip(place: MapPlace, tripId: string, day: number): void;
   saveTripDetails(tripId: string, value: TripDetails): void;
   toggleFavorite(id: string): void; savePreferences(value: Preferences): void; setConnection(value: Connection): void;
   testConnection(apiUrl: string): Promise<string>; sendMessage(text: string, retry?: boolean | 'regenerate'): Promise<void>;
