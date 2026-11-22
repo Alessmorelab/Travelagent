@@ -20,6 +20,7 @@ export function titleParts(title) {
 
 export function expandActivities(activities) {
   return activities.flatMap((activity) => {
+    if (activity.place?.name === activity.title) return [{ ...activity }];
     const { parts, choice } = titleParts(activity.title);
     if (parts.length === 1) return [{ ...activity }];
     if (choice) return [{ ...activity, alternatives: parts }];

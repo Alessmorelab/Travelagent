@@ -45,6 +45,54 @@ test('锁定可重新打开恢复，锁定或完成的活动不能加入请求�
   assert.equal(reopened.getState().trips.find((item) => item.id === id), trip);
 });
 
+test('跨天保存时间与备注，原地点、锁定及完成进度随活动移动并可重开恢复', async (t) => {
+  const { store, id, trip, storage } = await setup(t);
+  store.bindMapPlace('trip', id, 0, 1, '测试公园', place('测试公园', 30.6));
+  store.setActivityLocked(id, 0, 1, true);
+  for (const key of ['0-1', '0-2', '1-0']) store.toggleActivity(id, key);
+  const original = trip().days[0][1];
+  store.editActivity(id, 0, 1, { title: original.title, time: '15:00', detail: '改期后从北门集合' }, 1);
+  assert.equal(store.getState().activeDay, 1);
+  assert.deepEqual(trip().days[0].map((item) => item.title), ['测试博物馆', '测试餐厅']);
+  assert.deepEqual(trip().days[1][1], { ...original, time: '15:00', detail: '改期后从北门集合' });
+  assert.deepEqual([...trip().completed].sort(), ['0-1', '1-0', '1-1']);
+  await store.flush();
+  const reopened = createTravelStore(storage); t.after(() => reopened.dispose()); await reopened.hydrate();
+  const saved = reopened.getState().trips.find((item) => item.id === id);
+  assert.deepEqual(saved.days, trip().days);
+  assert.deepEqual([...saved.completed].sort(), ['0-1', '1-0', '1-1']);
+});
+
+test('跨天拆分超出目标日上限时保留原安排与进度，腾出空间后可重试', async (t) => {
+  const { store, id, trip } = await setup(t);
+  const fields = { title: '甲地 + 乙地', detail: '', time: '上午' };
+  store.toggleActivity(id, '0-0');
+  while (trip().days[1].length < 49) store.editActivity(id, 1, -1, { ...fields, title: '测试安排' });
+  const before = trip();
+  assert.throws(() => store.editActivity(id, 0, 0, fields, 1), /50项/);
+  assert.throws(() => store.editActivity(id, 0, 0, fields, 2), /日期/);
+  assert.equal(trip(), before);
+  assert.equal(store.getState().activeDay, 0);
+  store.removeActivity(id, 1, 48);
+  store.editActivity(id, 0, 0, fields, 1);
+  assert.deepEqual(trip().days[1].slice(-2).map((item) => item.title), ['甲地', '乙地']);
+  assert.equal(trip().days[1].length, 50);
+  assert.deepEqual(trip().completed, []);
+});
+
+test('搜索加入的复合店名跨天后仍是一个地点', async (t) => {
+  const { store, id, trip, storage } = await setup(t);
+  const venue = place('书房 & 咖啡', 30.6);
+  store.addPlaceToTrip(venue, id, 0);
+  const index = trip().days[0].length - 1;
+  store.editActivity(id, 0, index, trip().days[0][index], 1);
+  await store.flush();
+  const reopened = createTravelStore(storage); t.after(() => reopened.dispose()); await reopened.hydrate();
+  const day = reopened.getState().trips.find((item) => item.id === id).days[1];
+  assert.deepEqual(day.map((item) => item.title), ['测试车站', venue.name]);
+  assert.deepEqual(day[1].place, venue);
+});
+
 test('预览不写入，确认只替换指定活动，撤销恢复原地点并保留其他天的改动', async (t) => {
   const { store, id, trip } = await setup(t);
   store.setActivityLocked(id, 0, 0, true); store.toggleActivity(id, '0-2');

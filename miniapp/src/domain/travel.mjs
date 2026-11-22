@@ -431,22 +431,38 @@ export function createTravelStore(storage, options = {}) {
       update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed } : item) }, true);
     },
     clearTripFocus() { update({ focusTripId: '' }); },
-    editActivity(tripId, day, index, value) {
+    editActivity(tripId, day, index, value, targetDay = day) {
       const trip = state.trips.find((item) => item.id === tripId);
       if (!trip || !Number.isInteger(day) || day < 0 || day >= trip.days.length || !Number.isInteger(index) || index < -1 || index >= trip.days[day].length) throw new Error('行程安排不存在');
+      if (!Number.isInteger(targetDay) || !trip.days[targetDay]) throw new Error('请选择有效的行程日期');
       const title = String(value.title || '').trim(), time = String(value.time || '').trim(), detail = String(value.detail || '').trim();
       if (!title || title.length > 100 || time.length > 40 || detail.length > 5000) throw new Error('请填写地点或安排，并检查内容长度');
-      if (index === -1 && trip.days[day].length >= MAX_ACTIVITIES_PER_DAY) throw new Error(`当天最多保存${MAX_ACTIVITIES_PER_DAY}项安排`);
       const days = trip.days.map((items) => items.slice());
-      const previous = index >= 0 ? days[day][index] : null;
-      const activity = { title, time: time || '时间待定', detail, icon: previous?.icon || 'compass-outline', ...(previous?.locked === true ? { locked: true } : {}), ...(previous?.title === title && validPlace(previous.place) ? { place: previous.place } : {}) };
-      const expanded = expandActivities([activity]);
-      if (index < 0) days[day].push(...expanded); else days[day].splice(index, 1, ...expanded);
-      if (days[day].length > MAX_ACTIVITIES_PER_DAY) throw new Error(`拆分后当天安排超过${MAX_ACTIVITIES_PER_DAY}项，请减少地点`);
-      const completed = index < 0 ? trip.completed : remapDayCompletion(trip.completed, day,
-        (i) => i === index ? (previous.title === title ? i : null) : i > index ? i + expanded.length - 1 : i);
-      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed } : item) }, true);
-      toast('行程安排已保存');
+      const previous = days[day][index];
+      const sameTitle = previous?.title === title;
+      const fields = { title, time: time || '时间待定', detail };
+      const expanded = sameTitle ? [{ ...previous, ...fields }] : expandActivities([{
+        ...fields, icon: previous?.icon || 'compass-outline', ...(previous?.locked ? { locked: true } : {}),
+      }]);
+      const moving = day !== targetDay;
+      const insertion = previous && !moving ? index : days[targetDay].length;
+      if (previous) days[day].splice(index, 1);
+      if (days[targetDay].length + expanded.length > MAX_ACTIVITIES_PER_DAY) {
+        throw new Error(`第 ${targetDay + 1} 天最多保存${MAX_ACTIVITIES_PER_DAY}项安排，请减少地点或改选日期`);
+      }
+      days[targetDay].splice(insertion, 0, ...expanded);
+      let completed = trip.completed;
+      if (previous) {
+        const shift = moving ? -1 : expanded.length - 1;
+        completed = remapDayCompletion(completed, day, (position) => {
+          if (position === index) return sameTitle && !moving ? position : null;
+          return position > index ? position + shift : position;
+        });
+        if (moving && sameTitle && trip.completed.includes(`${day}-${index}`)) completed.push(`${targetDay}-${insertion}`);
+      }
+      update({ trips: state.trips.map((item) => item.id === tripId ? { ...item, days, completed } : item),
+        ...(moving ? { activeDay: targetDay } : {}) }, true);
+      toast(moving ? `已保存到第 ${targetDay + 1} 天` : '行程安排已保存');
     },
     removeActivity(tripId, day, index) {
       const trip = state.trips.find((item) => item.id === tripId);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Taro, { useDidShow } from '@tarojs/taro';
-import { Button, Input, ScrollView, Text, Textarea, View } from '@tarojs/components';
+import { Button, Input, Picker, ScrollView, Text, Textarea, View } from '@tarojs/components';
 import { dayCount, formatDate } from '../../domain/travel.mjs';
 import type { Activity, Trip } from '../../domain/travel.mjs';
 import { Empty, Icon, PageHeading, PreferenceSheet, Sheet, Toast } from '../../components';
@@ -9,7 +9,7 @@ import { readSources } from '../../domain/query-sources.mjs';
 import { TripDetailsSheet } from '../../trip-details-sheet';
 import { DayAdjustmentSheet } from '../../day-adjustment-sheet';
 import { PlaceSearch } from '../../place-search';
-import { formatTripText } from '../../domain/trip-details.mjs';
+import { formatTripText, tripEndDate } from '../../domain/trip-details.mjs';
 import { ItineraryMap } from '../../itinerary-map';
 import { itineraryForMessage } from '../../domain/map-data.mjs';
 import { isProtectedActivity, MAX_DAY_ACTIVITIES } from '../../domain/day-adjustment.mjs';
@@ -22,16 +22,26 @@ function ActivitySheet({ trip, day, index, onClose }: { trip: Trip; day: number;
     title: existing?.title || '', time: existing?.time === '时间待定' ? '' : existing?.time || '', detail: existing?.detail || ''
   });
   const [error, setError] = useState('');
-  const save = () => { try { store.editActivity(trip.id, day, index, value); onClose(); } catch (e) { setError((e as Error).message); } };
+  const [targetDay, setTargetDay] = useState(day);
+  const dates = trip.days.map((_, position) => `第 ${position + 1} 天 · ${tripEndDate(trip.startDate, position + 1) || '日期待定'}`);
+  const changed = targetDay !== day || value.title !== existing?.title || value.detail !== existing?.detail
+    || (value.time || '时间待定') !== (existing?.time || '时间待定');
+  const save = () => { try { store.editActivity(trip.id, day, index, value, targetDay); onClose(); } catch (e) { setError((e as Error).message); } };
   const remove = async () => {
     const result = await Taro.showModal({ title: '删除这项安排？', content: existing?.title || '', confirmText: '删除', confirmColor: '#cb7651' });
     if (result.confirm) { store.removeActivity(trip.id, day, index); onClose(); }
   };
   return <Sheet title={existing ? '编辑行程安排' : '添加行程安排'} folio={`DAY ${String(day + 1).padStart(2, '0')}  /  FIELD NOTES`} onClose={onClose} footer={<>
     {error && <Text className='form-error'>{error}</Text>}
-    <Button className='primary-button' onClick={save}>保存安排</Button>
+    <Button className='primary-button' onClick={save}>{targetDay === day ? '保存安排' : `保存到第 ${targetDay + 1} 天`}</Button>
   </>}>
     <View className='form-chapter'><Text>{String((existing ? index : trip.days[day].length) + 1).padStart(2, '0')}</Text><Text>{trip.destination} · 第 {day + 1} 天</Text></View>
+    {dates.length > 1 && <View className='form-field'><Text className='field-label'>安排在哪一天</Text>
+      <Picker mode='selector' range={dates} value={targetDay} onChange={(event) => { setTargetDay(Number(event.detail.value)); setError(''); }}>
+        <View className='form-input date-value'>{dates[targetDay]}<Text>⌄</Text></View>
+      </Picker>
+      {targetDay !== day && <Text className='muted'>保存后排在第 {targetDay + 1} 天末尾。</Text>}
+    </View>}
     <View className='form-field'><Text className='field-label'>地点或安排</Text><Input className='form-input' value={value.title} maxlength={100} placeholder='例如：黄鹤楼' onInput={(e) => setValue({ ...value, title: e.detail.value })} /></View>
     <View className='form-field'><Text className='field-label'>时间</Text><Input className='form-input' value={value.time} maxlength={40} placeholder='例如：上午或 09:00' onInput={(e) => setValue({ ...value, time: e.detail.value })} /></View>
     <View className='form-field'><Text className='field-label'>备注</Text><Textarea className='form-input trip-note-input' value={value.detail} maxlength={5000} placeholder='添加玩法、交通或提醒' onInput={(e) => setValue({ ...value, detail: e.detail.value })} /></View>
@@ -39,7 +49,7 @@ function ActivitySheet({ trip, day, index, onClose }: { trip: Trip; day: number;
       <Button className='secondary-button' onClick={() => store.setActivityLocked(trip.id, day, index, !existing.locked)}>{existing.locked ? '解除活动锁定' : '锁定活动'}</Button>
       <Text className='note'>{existing.locked ? '已锁定。AI 调整时会保留该活动。' : '已预约或不想改的安排可以锁定。'}</Text>
     </View>}
-    {existing && <View className='button-row'><Button className='text-button' disabled={index === 0} onClick={() => { store.moveActivity(trip.id, day, index, -1); onClose(); }}>上移</Button><Button className='text-button' disabled={index === trip.days[day].length - 1} onClick={() => { store.moveActivity(trip.id, day, index, 1); onClose(); }}>下移</Button></View>}
+    {existing && !changed && <View className='button-row'><Button className='text-button' disabled={index === 0} onClick={() => { store.moveActivity(trip.id, day, index, -1); onClose(); }}>上移</Button><Button className='text-button' disabled={index === trip.days[day].length - 1} onClick={() => { store.moveActivity(trip.id, day, index, 1); onClose(); }}>下移</Button></View>}
     {existing && <Button className='text-button danger' onClick={() => void remove()}>删除这项安排</Button>}
   </Sheet>;
 }

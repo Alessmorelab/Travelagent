@@ -42,7 +42,7 @@ export function createTravelStore(storage: { getItem(key: string): Promise<strin
   cancelMessage(): void; clearChat(): void; createTrip(value: Preferences): void; toggleActivity(id: string, key: string): void;
   newConversation(agent?: Agent): void; getChatHistory(): ChatSnapshot[]; restoreConversation(value: ChatSnapshot): void; deleteLocalConversation(id: string): void;
   saveAssistantTrip(message: Message, destination: string): string; clearTripFocus(): void;
-  editActivity(tripId: string, day: number, index: number, value: Pick<Activity, 'title' | 'time' | 'detail'>): void;
+  editActivity(tripId: string, day: number, index: number, value: Pick<Activity, 'title' | 'time' | 'detail'>, targetDay?: number): void;
   moveActivity(tripId: string, day: number, index: number, direction: number): void;
   setActivityLocked(tripId: string, day: number, index: number, locked: boolean): void;
   applyDayAdjustment(id: string, day: number, revision: string, targets: number[], changes: DayChange[], places?: Record<number, MapPlace>): void;
