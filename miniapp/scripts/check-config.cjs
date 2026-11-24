@@ -4,6 +4,11 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { validateConfig } = require('@tarojs/plugin-doctor/js-binding');
 
+if (process.argv.includes('--require-api-url') && !process.env.ROAM_API_URL?.trim()) {
+  console.error('真机构建前请设置 ROAM_API_URL，填写手机可访问的 HTTPS 后端地址。');
+  process.exit(1);
+}
+
 // Run Taro's own bundled schema validation without the CLI wrapper's home-directory cache.
 const filename = path.resolve(__dirname, '../config/index.ts');
 const source = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {

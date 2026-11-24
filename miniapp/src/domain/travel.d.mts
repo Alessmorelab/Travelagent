@@ -16,6 +16,7 @@ export type Progress = { key: string; label: string; state: 'running' | 'complet
 export type ChatSnapshot = { id: string; title: string; agent: Agent; mode: 'demo' | 'live'; apiUrl?: string; messages: Message[]; thread_id?: string; updated: number };
 export type State = { tab: Tab; agent: Agent; filter: string; activeDay: number; focusTripId?: string; busy: boolean; connectionStatus?: string; mapTarget?: { kind: 'trip' | 'message'; id: string } | null; error: string; toast: string; hydrated: boolean; saving: boolean; saveError: string; connection: Connection; preferences: Preferences; preferencesConfirmed: boolean; favorites: string[]; savedPlaces: SavedPlace[]; trips: Trip[]; messages: Message[]; threads: Partial<Record<Agent, string>>; lastQuery?: string; lastRequestId?: string; progress: Progress[]; chatHistory: ChatSnapshot[]; activeChats: Partial<Record<Agent, string>> };
 export const STORAGE_KEY: string;
+export const DEFAULT_API_URL: string;
 export const MAX_ACTIVITIES_PER_DAY: number;
 export const AGENTS: { id: Agent; label: string; icon: string }[];
 export const DESTINATIONS: Destination[];

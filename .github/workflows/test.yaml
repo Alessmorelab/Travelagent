@@ -15,6 +15,8 @@ jobs:
     name: 小程序测试与微信构建
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      ROAM_API_URL: https://roam-ci.invalid/gateway/
     defaults:
       run:
         working-directory: miniapp
@@ -27,7 +29,7 @@ jobs:
           cache-dependency-path: miniapp/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm test
-      - run: npm run build:weapp
+      - run: npm run build:weapp:device
       - run: npm run check:dist
       - run: npm run check:runtime
 

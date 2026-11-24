@@ -40,6 +40,10 @@ global.getApp = () => app;
     page.onLoad?.({}); page.onShow?.();
     await new Promise((resolve) => setTimeout(resolve, 35));
     assert.ok(page.data && JSON.stringify(page.data).length > 100, `${names[index]} must produce a render tree`);
+    if (names[index] === 'profile' && process.env.ROAM_API_URL) {
+      const expected = new URL(process.env.ROAM_API_URL).href.replace(/\/+$/, '');
+      assert.ok(JSON.stringify(page.data).includes(`真实服务 · ${expected}"`), '新安装的小程序应使用构建指定的服务地址');
+    }
     page.onHide?.(); page.onUnload?.();
   }
   assert.ok(updates >= 4);

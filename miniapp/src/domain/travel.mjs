@@ -38,7 +38,9 @@ const kyotoDays = [
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
-export function initialState(apiUrl = 'http://127.0.0.1:8000') {
+export const DEFAULT_API_URL = typeof __ROAM_DEFAULT_API_URL__ === 'string' ? __ROAM_DEFAULT_API_URL__ : 'http://127.0.0.1:8000';
+
+export function initialState(apiUrl = DEFAULT_API_URL) {
   return {
     tab: 'assistant', agent: 'team', filter: '全部', activeDay: 0, busy: false, error: '', toast: '', hydrated: false,
     saving: false, saveError: '',

@@ -56,3 +56,19 @@ test('升级后主动切换到示例模式，重新打开仍保留用户选择',
   assert.equal(reopened.getState().connection.mode, 'demo');
   assert.match(reopened.getState().messages.at(-1).content, /示例回复/);
 });
+
+test('更换构建默认地址后保留已保存的连接；用户主动切换后使用新的服务会话', async (t) => {
+  const storage = memory(), apiUrl = 'https://new.fixture.example/roam', calls = [];
+  const saved = { ...initialState('https://old.fixture.example'), version: 2, threads: { team: 'previous-thread' } };
+  await storage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  const store = createTravelStore(storage, { apiUrl, stream: async (input) => { calls.push(input); return { response: '测试回复' }; } });
+  t.after(() => store.dispose()); await store.hydrate();
+  await store.sendMessage('继续之前的行程');
+  assert.equal(calls[0].apiUrl, saved.connection.apiUrl);
+  assert.equal(calls[0].threadId, 'previous-thread');
+  store.setConnection({ mode: 'live', apiUrl }); await store.flush();
+  await store.sendMessage('使用新版地址'); await store.flush();
+  assert.equal(calls[1].apiUrl, apiUrl);
+  assert.equal(calls[1].threadId, undefined);
+  assert.equal(JSON.parse(await storage.getItem(STORAGE_KEY)).connection.apiUrl, apiUrl);
+});

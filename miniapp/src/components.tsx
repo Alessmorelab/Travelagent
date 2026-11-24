@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
 import Taro from '@tarojs/taro';
 import { Button, Image, Input, Picker, ScrollView, Text, View } from '@tarojs/components';
-import { DESTINATIONS, AGENTS } from './domain/travel.mjs';
+import { DESTINATIONS, AGENTS, DEFAULT_API_URL } from './domain/travel.mjs';
 import type { Destination, Preferences, State } from './domain/travel.mjs';
 import { goTab, sendQuery, store } from './stores/travel';
 
@@ -116,5 +116,19 @@ export function ConnectionSheet({ state, onClose }: { state: State; onClose: () 
     finally { if (mounted.current) setTesting(false); }
   };
   const save = () => { try { store.setConnection(form); onClose(); } catch (err) { setError((err as Error).message); } };
-  return <Sheet title='连接你的旅行服务' onClose={onClose}><Text className='sheet-description'>默认使用真实服务，发送消息即调用后端已配置的模型。需要更换服务地址时在此修改。</Text><View className='mode-options'>{(['live', 'demo'] as const).map((mode) => <View key={mode} className={`mode-option ${form.mode === mode ? 'active' : ''}`} onClick={() => setForm({ ...form, mode })}><Text>{mode === 'demo' ? '灵感预览' : '真实服务'}</Text><Text className='mode-description'>{mode === 'demo' ? '体验示例，无需后端' : '连接你的旅行后端'}</Text></View>)}</View><View className='form-field'><Text className='field-label'>后端服务地址</Text><Input className='form-input' value={form.apiUrl} placeholder='https://你的服务域名' maxlength={300} onInput={(event) => { setForm({ ...form, apiUrl: event.detail.value }); setFeedback(''); setError(''); }} /></View><Text className='sheet-description'>正式服务请填写 HTTPS 地址。这里只填服务地址，模型密钥保留在后端。</Text>{error && <Text className='form-error'>{error}</Text>}{feedback && <Text className='form-success'>{feedback}</Text>}<View className='button-row'><Button className='secondary-button' disabled={testing} loading={testing} onClick={() => void test()}>{testing ? '正在连接' : '测试连接'}</Button><Button className='primary-button' onClick={save}>保存设置 ✓</Button></View></Sheet>;
+  const editUrl = (apiUrl: string) => { setForm({ ...form, apiUrl }); setFeedback(''); setError(''); };
+  return <Sheet title='连接你的旅行服务' onClose={onClose}>
+    <Text className='sheet-description'>真实服务会向下方地址发送旅行请求。修改后点击「保存设置」生效。</Text>
+    <View className='mode-options'>{(['live', 'demo'] as const).map((mode) => <View key={mode} className={`mode-option ${form.mode === mode ? 'active' : ''}`} onClick={() => setForm({ ...form, mode })}>
+      <Text>{mode === 'demo' ? '灵感预览' : '真实服务'}</Text><Text className='mode-description'>{mode === 'demo' ? '体验示例，无需后端' : '连接你的旅行后端'}</Text>
+    </View>)}</View>
+    <View className='form-field'><Text className='field-label'>后端服务地址</Text>
+      <Input className='form-input' value={form.apiUrl} placeholder='https://你的服务域名' maxlength={300} onInput={(event) => editUrl(event.detail.value)} />
+      {form.apiUrl !== DEFAULT_API_URL && <Button className='text-button' onClick={() => editUrl(DEFAULT_API_URL)}>恢复本版本默认地址</Button>}
+    </View>
+    <Text className='sheet-description'>正式服务请填写 HTTPS 地址。模型密钥保留在后端。</Text>
+    {error && <Text className='form-error'>{error}</Text>}{feedback && <Text className='form-success'>{feedback}</Text>}
+    <View className='button-row'><Button className='secondary-button' disabled={testing} loading={testing} onClick={() => void test()}>测试连接</Button>
+      <Button className='primary-button' onClick={save}>保存设置 ✓</Button></View>
+  </Sheet>;
 }

@@ -6,6 +6,7 @@
   "scripts": {
     "dev:weapp": "npm run check:config && taro build --type weapp --watch --no-check",
     "build:weapp": "npm run check:config && taro build --type weapp --no-check",
+    "build:weapp:device": "npm run check:config -- --require-api-url && taro build --type weapp --no-check",
     "check:config": "node scripts/check-config.cjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
