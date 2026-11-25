@@ -8,7 +8,18 @@ const project = JSON.parse(await readFile(resolve(root, 'project.config.json'), 
 assert.equal(project.miniprogramRoot, 'dist/');
 const workspaceProject = JSON.parse(await readFile(resolve(root, '../project.config.json'), 'utf8'));
 assert.equal(resolve(root, '../', workspaceProject.miniprogramRoot), resolve(root, 'dist/'), 'repository import must use the same compiled package');
-const dist = resolve(root, project.miniprogramRoot);
+const preview = process.argv.includes('--preview');
+const dist = resolve(root, preview ? 'build/weapp-preview' : project.miniprogramRoot);
+if (preview) {
+  const config = JSON.parse(await readFile(resolve(dist, 'project.config.json'), 'utf8'));
+  assert.equal(config.miniprogramRoot, './');
+  assert.equal(config.compileType, 'miniprogram');
+  assert.equal(config.setting.urlCheck, true);
+  assert.ok(/^wx[0-9a-f]{16}$/.test(config.appid), '预览工程缺少有效格式的 AppID');
+  if (process.env.ROAM_APP_ID !== undefined) {
+    assert.ok(config.appid === process.env.ROAM_APP_ID.trim(), '预览工程的 AppID 与构建配置不一致');
+  }
+}
 const app = JSON.parse(await readFile(resolve(dist, 'app.json'), 'utf8'));
 assert.deepEqual(app.pages, ['pages/assistant/index', 'pages/trips/index', 'pages/favorites/index', 'pages/profile/index']);
 assert.equal(app.tabBar.list.length, 4);
@@ -27,5 +38,5 @@ for (const name of ['app.js', 'app.wxss', 'base.wxml']) await stat(resolve(dist,
 const css = await readFile(resolve(dist, 'app.wxss'), 'utf8');
 assert.ok(css.includes('rpx'), 'design sizes should compile to responsive rpx');
 console.log('WeChat package verified: 4 pages, 4 tabs, 8 PNG icons, WXML/JS/WXSS and project import path.');
-if (workspaceProject.appid && workspaceProject.appid !== 'touristappid') console.log('Repository import uses your configured AppID; the miniapp directory still has the default visitor AppID.');
-else if (project.appid === 'touristappid') console.log('Visitor AppID configured: replace it with your own AppID before phone preview or upload.');
+if (preview) console.log('已校验独立预览工程入口、AppID 配置与域名校验开关。');
+else if (project.appid === 'touristappid') console.log('miniapp 使用游客配置。真机预览可使用 npm run build:weapp:preview 生成独立工程。');

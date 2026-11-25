@@ -23,7 +23,7 @@ global.Component = () => {};
 global.getApp = () => app;
 
 (async () => {
-  const dist = path.resolve(__dirname, '../dist');
+  const dist = path.resolve(__dirname, process.argv.includes('--preview') ? '../build/weapp-preview' : '../dist');
   require(path.join(dist, 'app.js'));
   assert.ok(app, 'compiled bundle must register an App');
   app.onLaunch?.({});

@@ -5,6 +5,17 @@ import { fileURLToPath } from 'node:url';
 
 const check = fileURLToPath(new URL('../scripts/check-config.cjs', import.meta.url));
 
+test('预览构建在调用编译器前检查 AppID，错误提示不会回显输入值', () => {
+  const script = fileURLToPath(new URL('../scripts/build-preview.cjs', import.meta.url));
+  for (const invalid of ['', 'touristappid', 'wx123', 'fixture-private-value']) {
+    const result = spawnSync(process.execPath, [script], { env: { ...process.env, ROAM_APP_ID: invalid }, encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /ROAM_APP_ID/);
+    if (invalid) assert.ok(!result.stderr.includes(invalid));
+    assert.equal(result.stdout, '');
+  }
+});
+
 test('真机构建拒绝空地址、本机地址和带凭据的配置，错误信息不回显输入', () => {
   for (const value of [undefined, '  ', 'http://travel.example.org', 'https://127.0.0.1', 'https://localhost',
     'https://travel.example.org/api?key=fixture-private', 'https://fixture-private@travel.example.org', 'https://travel.example.org/#fixture-private']) {

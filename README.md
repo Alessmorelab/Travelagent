@@ -33,7 +33,7 @@ npm ci
 npm run build:weapp
 ```
 
-微信开发者工具导入 `miniapp`，入口配置为 `dist/`；该入口默认游客 AppID，手机预览需换成自己的 AppID。已经导入仓库根目录 `travel_agent` 的，可继续使用根目录项目配置，它指向 `miniapp/dist/`，沿用你填写的 AppID。
+模拟器开发可导入 `miniapp` 或仓库根目录，两者都加载 `miniapp/dist/`。真机预览可通过 `ROAM_APP_ID` 和 `ROAM_API_URL` 生成独立工程，再导入 `miniapp/build/weapp-preview`。真实 AppID 只写入本地产物。
 
 默认进入「真实服务」。本地开发构建连接 `http://127.0.0.1:8000`；真机内测可在构建时指定 HTTPS 后端地址，新安装无需手动配置。已有用户可在「我的 → 旅行服务」选择「恢复本版本默认地址」并保存。详见[真机构建说明](miniapp/README.md#真机构建)。
 

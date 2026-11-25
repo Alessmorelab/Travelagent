@@ -9,7 +9,7 @@ Taro 4.3 + React 18 + TypeScript，接入现有 FastAPI / LangGraph 旅行助手
 1. **项目目录：本目录 `miniapp`**。
 2. 项目配置已设置 `miniprogramRoot: "dist/"`，工具会加载编译产物。
 3. 还没有小程序 AppID 时，可以先用工具提供的游客/测试模式查看模拟器。默认 `touristappid` 仅为游客配置，不能承诺支持真机预览、上传或发布。
-4. 真机测试：在 [微信公众平台](https://mp.weixin.qq.com/) 注册小程序并获取自己的 AppID，在项目详情中替换 AppID，或修改本目录 `project.config.json` 的 `appid`。当前登录微信需具备该小程序的开发者权限。
+4. 真机测试：在 [微信公众平台](https://mp.weixin.qq.com/) 获取自己的小程序 AppID，按下方「真机构建」生成并导入独立预览工程。当前登录微信需具备该小程序的开发者权限。
 5. 点击「预览」，使用手机微信扫描二维码。发布前还需按微信当前后台要求完成相关配置与审核。
 
 如果已经将仓库根目录 `travel_agent` 导入开发者工具，也可以继续使用：根目录的 `project.config.json` 已将 `miniprogramRoot` 指向 `miniapp/dist/`。该入口沿用你在开发者工具中填写的 AppID；修改配置后重新编译即可。不要将源码目录 `miniapp/src` 作为小程序根目录。
@@ -42,13 +42,16 @@ npm run check:runtime
 
 ## 真机构建
 
-在 `miniapp` 目录执行以下命令，把示例域名换成已部署的后端域名。可附带反向代理路径前缀；程序会自动拼接接口路径，并将聊天连接切换到对应的 WSS 地址。
+在 `miniapp` 目录执行以下命令，把两个占位值换成自己的小程序 AppID 和已部署的 HTTPS 后端地址。可以使用反向代理路径前缀，程序会自动拼接接口路径和对应的 WSS 聊天地址。
 
 ```sh
-ROAM_API_URL=https://travel.example.org npm run build:weapp:device
+ROAM_APP_ID='你的小程序AppID' ROAM_API_URL='https://travel.example.org' npm run build:weapp:preview
+npm run check:dist -- --preview
 ```
 
-该地址会写入小程序包，环境变量只填写服务地址。缺少地址，或使用 HTTP、IP、本机域名、账号密码、查询参数或片段时，真机构建会报错。常规开发继续用 `npm run build:weapp`，未提供环境变量时使用模拟器本机地址。
+构建成功后，在微信开发者工具中导入 **`miniapp/build/weapp-preview`**。其入口为当前目录，工程配置启用域名校验。预览目录被 Git 忽略；源工程的项目配置和原有 `dist/` 不会被这条命令改写。命令只生成本地工程，AppID 的归属、开发者权限和合法域名仍需通过微信验证。
+
+已有 AppID 配置且继续使用原工程入口时，仍可用 `ROAM_API_URL=https://travel.example.org npm run build:weapp:device` 生成 `dist/`。缺少地址，或使用 HTTP、IP、本机域名、账号密码、查询参数或片段时，真机构建会报错。常规开发继续用 `npm run build:weapp`，未提供环境变量时使用模拟器本机地址。客户端地址为公开信息，请勿填写服务密钥。
 
 已有安装会保留有效的服务地址和当前模式。若之前使用本机地址，可在「我的 → 旅行服务」点击「恢复本版本默认地址」，核对地址并保存。要上传体验版，仍需真实 AppID、可访问的后端和微信后台的合法域名配置。
 

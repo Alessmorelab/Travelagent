@@ -22,7 +22,7 @@ const config: IProjectConfig = {
   designWidth: 750,
   deviceRatio: { 640: 2.34 / 2, 750: 1, 828: 1.81 / 2 },
   sourceRoot: 'src',
-  outputRoot: 'dist',
+  outputRoot: process.env.ROAM_PREVIEW_BUILD === '1' ? 'build/weapp-preview' : 'dist',
   framework: 'react',
   compiler: 'webpack5',
   plugins: [],

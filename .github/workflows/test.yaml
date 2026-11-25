@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 15
     env:
       ROAM_API_URL: https://roam-ci.invalid/gateway/
+      ROAM_APP_ID: wx0000000000000000
     defaults:
       run:
         working-directory: miniapp
@@ -29,9 +30,9 @@ jobs:
           cache-dependency-path: miniapp/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm test
-      - run: npm run build:weapp:device
-      - run: npm run check:dist
-      - run: npm run check:runtime
+      - run: npm run build:weapp:preview
+      - run: npm run check:dist -- --preview
+      - run: npm run check:runtime -- --preview
 
   backend:
     name: 后端测试
